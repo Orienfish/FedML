@@ -48,6 +48,8 @@ class FedAVGServerManager(ServerManager):
         self.aggregator.add_local_trained_result(sender_id - 1, model_params, local_sample_number)
         b_all_received = self.aggregator.check_whether_all_receive()
         logging.info("b_all_received = " + str(b_all_received))
+
+        # Start aggregation once weights from all clients are received
         if b_all_received:
             global_model_params = self.aggregator.aggregate()
             self.aggregator.test_on_server_for_all_clients(self.round_idx)
@@ -58,13 +60,19 @@ class FedAVGServerManager(ServerManager):
                 self.finish()
                 return
 
+            # Note: args.is_preprocessed is used in the case of dynamic local dataset
+            # args.is_preprocessed indicates local dataset is configured in the beginning
+            # for each time stamp
+            # In our case, we use static dataset, so the client_indexes here is not used
+            # after transmitted back to clients
             if self.is_preprocessed:
                 # sampling has already been done in data preprocessor
                 client_indexes = [self.round_idx] * self.args.client_num_per_round
                 print('indexes of clients: ' + str(client_indexes))
             else:
                 # # sampling clients
-                client_indexes = self.aggregator.client_sampling(self.round_idx, self.args.client_num_in_total,
+                client_indexes = self.aggregator.client_sampling(self.round_idx,
+                                                                 self.args.client_num_in_total,
                                                                  self.args.client_num_per_round)
 
             print("size = %d" % self.size)

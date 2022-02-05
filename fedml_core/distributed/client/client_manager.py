@@ -25,9 +25,11 @@ class ClientManager(Observer):
             HOST = mqtt_host
             # HOST = "broker.emqx.io"
             PORT = mqtt_port
-            self.com_manager = MqttCommManager(HOST, PORT, client_id=rank, client_num=size - 1)
+            self.com_manager = MqttCommManager(HOST, PORT, client_id=rank,
+                                               client_num=size - 1)
         else:
-            self.com_manager = MpiCommunicationManager(comm, rank, size, node_type="client")
+            self.com_manager = MpiCommunicationManager(comm, rank, size,
+                                                       node_type="client")
         self.com_manager.add_observer(self)
         self.message_handler_dict = dict()
 

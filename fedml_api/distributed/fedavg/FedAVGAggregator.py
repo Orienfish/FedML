@@ -99,6 +99,8 @@ class FedAVGAggregator(object):
             train_num_samples = []
             train_tot_corrects = []
             train_losses = []
+
+            # Test on each client's local training dataset
             for client_idx in range(self.args.client_num_in_total):
                 # train data
                 metrics = self.trainer.test(self.train_data_local_dict[client_idx], self.device, self.args)
@@ -122,7 +124,7 @@ class FedAVGAggregator(object):
             stats = {'training_acc': train_acc, 'training_loss': train_loss}
             logging.info(stats)
 
-            # test data
+            # Test on global test dataset
             test_num_samples = []
             test_tot_corrects = []
             test_losses = []

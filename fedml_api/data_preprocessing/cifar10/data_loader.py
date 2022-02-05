@@ -314,7 +314,9 @@ def load_partition_data_cifar10(dataset, data_dir, partition_method, partition_a
         data_local_num_dict[client_idx] = local_data_num
         logging.info("client_idx = %d, local_sample_number = %d" % (client_idx, local_data_num))
 
-        # training batch size = 64; algorithms batch size = 32
+        # local training and testing dataset
+        # train_data_local: data_size_per_client in total, each batch is of batch_size
+        # test_data_local: the total test dataset, each batch is of batch_size
         train_data_local, test_data_local = get_dataloader(dataset, data_dir, batch_size, batch_size,
                                                  dataidxs)
         logging.info("client_idx = %d, batch_num_train_local = %d, batch_num_test_local = %d" % (
