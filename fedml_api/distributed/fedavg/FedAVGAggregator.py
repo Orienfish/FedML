@@ -32,6 +32,8 @@ class FedAVGAggregator(object):
         for idx in range(self.worker_num):
             self.flag_client_model_uploaded_dict[idx] = False
 
+        self.start_time = time.time()
+
     def get_global_model_params(self):
         return self.trainer.get_model_params()
 
@@ -99,6 +101,7 @@ class FedAVGAggregator(object):
             train_num_samples = []
             train_tot_corrects = []
             train_losses = []
+            cur_time = time.time() - self.start_time
 
             # Test on each client's local training dataset
             for client_idx in range(self.args.client_num_in_total):
@@ -142,3 +145,9 @@ class FedAVGAggregator(object):
             wandb.log({"Test/Loss": test_loss, "round": round_idx})
             stats = {'test_acc': test_acc, 'test_loss': test_loss}
             logging.info(stats)
+
+            # Log time and stats
+            with open(self.args.result_dir + '/result.txt', 'a+') as f:
+                f.write("{},{},{},{},{}\n".format(
+                    cur_time, test_acc, test_loss, train_acc, train_loss
+                ))

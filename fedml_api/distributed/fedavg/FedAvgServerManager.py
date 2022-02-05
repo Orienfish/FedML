@@ -47,7 +47,7 @@ class FedAVGServerManager(ServerManager):
 
         self.aggregator.add_local_trained_result(sender_id - 1, model_params, local_sample_number)
         b_all_received = self.aggregator.check_whether_all_receive()
-        logging.info("b_all_received = " + str(b_all_received))
+        logging.info("round={} b_all_received={}".format(self.round_idx, b_all_received))
 
         # Start aggregation once weights from all clients are received
         if b_all_received:
@@ -68,14 +68,14 @@ class FedAVGServerManager(ServerManager):
             if self.is_preprocessed:
                 # sampling has already been done in data preprocessor
                 client_indexes = [self.round_idx] * self.args.client_num_per_round
-                print('indexes of clients: ' + str(client_indexes))
+                # print('indexes of clients: ' + str(client_indexes))
             else:
                 # # sampling clients
                 client_indexes = self.aggregator.client_sampling(self.round_idx,
                                                                  self.args.client_num_in_total,
                                                                  self.args.client_num_per_round)
 
-            print("size = %d" % self.size)
+            # print("size = %d" % self.size)
             if self.args.is_mobile == 1:
                 print("transform_tensor_to_list")
                 global_model_params = transform_tensor_to_list(global_model_params)
