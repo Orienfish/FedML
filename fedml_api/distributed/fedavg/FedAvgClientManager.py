@@ -16,8 +16,9 @@ from .utils import transform_list_to_tensor
 
 
 class FedAVGClientManager(ClientManager):
-    def __init__(self, args, trainer, comm=None, rank=0, size=0, backend="MPI"):
-        super().__init__(args, comm, rank, size, backend)
+    def __init__(self, args, trainer, comm=None, rank=0, size=0, backend="MPI",
+                 mqtt_host="127.0.0.1", mqtt_port=1883):
+        super().__init__(args, comm, rank, size, backend, mqtt_host, mqtt_port)
         self.trainer = trainer
         self.num_rounds = args.comm_round
         self.round_idx = 0
@@ -56,7 +57,8 @@ class FedAVGClientManager(ClientManager):
             model_params = transform_list_to_tensor(model_params)
 
         self.trainer.update_model(model_params)
-        self.trainer.update_dataset(int(client_index))
+        # Disable local dataset update here - we use static dataset at each client
+        # self.trainer.update_dataset(int(client_index))
         self.round_idx += 1
         self.__train()
         if self.round_idx == self.num_rounds - 1:

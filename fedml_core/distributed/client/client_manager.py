@@ -11,17 +11,20 @@ from ..communication.observer import Observer
 
 class ClientManager(Observer):
 
-    def __init__(self, args, comm=None, rank=0, size=0, backend="MPI"):
+    def __init__(self, args, comm=None, rank=0, size=0, backend="MPI",
+                 mqtt_host="127.0.0.1", mqtt_port=1883):
         self.args = args
         self.size = size
         self.rank = rank
+
         self.backend = backend
         if backend == "MPI":
-            self.com_manager = MpiCommunicationManager(comm, rank, size, node_type="client")
+            self.com_manager = MpiCommunicationManager(comm, rank, size,
+                                                       node_type="server")
         elif backend == "MQTT":
-            HOST = "0.0.0.0"
+            HOST = mqtt_host
             # HOST = "broker.emqx.io"
-            PORT = 1883
+            PORT = mqtt_port
             self.com_manager = MqttCommManager(HOST, PORT, client_id=rank, client_num=size - 1)
         else:
             self.com_manager = MpiCommunicationManager(comm, rank, size, node_type="client")
