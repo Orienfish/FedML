@@ -72,6 +72,7 @@ def _data_transforms_cifar10():
     ])
 
     valid_transform = transforms.Compose([
+        transforms.ToPILImage(),
         transforms.ToTensor(),
         transforms.Normalize(FashionMNIST_MEAN, FashionMNIST_STD),
     ])

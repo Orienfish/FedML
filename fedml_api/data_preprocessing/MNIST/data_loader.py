@@ -72,6 +72,7 @@ def _data_transforms_mnist():
     ])
 
     valid_transform = transforms.Compose([
+        transforms.ToPILImage(),
         transforms.ToTensor(),
         transforms.Normalize(MNIST_MEAN, MNIST_STD),
     ])
