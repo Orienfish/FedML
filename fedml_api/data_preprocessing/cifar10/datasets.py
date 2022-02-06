@@ -47,26 +47,14 @@ class CIFAR10_truncated(data.Dataset):
         self.target_transform = target_transform
         self.download = download
 
-        self.data, self.target = self.__build_truncated_dataset__()
-
-    def __build_truncated_dataset__(self):
-        print("download = " + str(self.download))
-        cifar_dataobj = CIFAR10(self.root, self.train, self.transform, self.target_transform, self.download)
-
-        if self.train:
-            # print("train member of the class: {}".format(self.train))
-            # data = cifar_dataobj.train_data
-            data = cifar_dataobj.data
-            target = np.array(cifar_dataobj.targets)
-        else:
-            data = cifar_dataobj.data
-            target = np.array(cifar_dataobj.targets)
+        cifar_dataobj = CIFAR10(self.root, self.train, self.transform,
+                                         self.target_transform, self.download)
+        self.data = cifar_dataobj.data
+        self.target = np.array(cifar_dataobj.targets)
 
         if self.dataidxs is not None:
-            data = data[self.dataidxs]
-            target = target[self.dataidxs]
-
-        return data, target
+            self.data = self.data[self.dataidxs]
+            self.target = self.target[self.dataidxs]
 
     def truncate_channel(self, index):
         for i in range(index.shape[0]):

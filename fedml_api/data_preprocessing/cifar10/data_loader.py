@@ -7,13 +7,15 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 
 from .datasets import CIFAR10_truncated
-from .load_data import Loader, BiasLoader, ShardLoader
-from .dists import *
+
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../utils'))
+from load_data import Loader, BiasLoader, ShardLoader
 
 logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
 
 # generate the non-IID distribution for all methods
 def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/CIFAR10/distribution.txt'):
