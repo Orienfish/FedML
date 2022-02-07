@@ -28,7 +28,7 @@ class MqttCommManager(BaseCommunicationManager):
         self._client.on_message = self._on_message
         self._client.on_subscribe = self._on_subscribe
         # connect broker,connect() or connect_async()
-        self._client.connect(host, port, 60)
+        self._client.connect(host, port, keepalive=600)
         self._client.loop_start()
         # self._client.loop_forever()
 
@@ -118,6 +118,7 @@ class MqttCommManager(BaseCommunicationManager):
         else:
             # client
             self._client.publish(self._topic + str(self.client_id), payload=msg.to_json())
+            logging.info("published")
 
     def handle_receive_message(self):
         pass

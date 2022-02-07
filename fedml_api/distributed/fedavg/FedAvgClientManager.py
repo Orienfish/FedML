@@ -40,7 +40,8 @@ class FedAVGClientManager(ClientManager):
             global_model_params = transform_list_to_tensor(global_model_params)
 
         self.trainer.update_model(global_model_params)
-        self.trainer.update_dataset(int(client_index))
+        # Disable local dataset update here - we use static dataset at each client
+        # self.trainer.update_dataset(int(client_index))
         self.round_idx = 0
         self.__train()
 

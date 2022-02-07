@@ -37,7 +37,7 @@ class MyModelTrainer(ModelTrainer):
             batch_loss = []
             for batch_idx, (x, labels) in enumerate(train_data):
                 # logging.info(images.shape)
-                x, labels = x.to(device), labels.to(device)
+                x, labels = x.to(device), labels.to(dtype=torch.long).to(device)
                 optimizer.zero_grad()
                 log_probs = model(x)
                 loss = criterion(log_probs, labels)
