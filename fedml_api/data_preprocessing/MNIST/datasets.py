@@ -48,7 +48,7 @@ class MNIST_truncated(data.Dataset):
         self.download = download
 
         mnist_dataobj = MNIST(self.root, self.train, self.transform,
-                                self.target_transform, self.download)
+                              self.target_transform, self.download)
         self.data = mnist_dataobj.data
         self.target = np.array(mnist_dataobj.targets)
 

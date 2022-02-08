@@ -48,7 +48,7 @@ class CIFAR10_truncated(data.Dataset):
         self.download = download
 
         cifar_dataobj = CIFAR10(self.root, self.train, self.transform,
-                                         self.target_transform, self.download)
+                                self.target_transform, self.download)
         self.data = cifar_dataobj.data
         self.target = np.array(cifar_dataobj.targets)
 
