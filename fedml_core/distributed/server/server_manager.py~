@@ -1,17 +1,16 @@
 import logging
 from abc import abstractmethod
 
-# from mpi4py import MPI
+from mpi4py import MPI
 
-from ..communication.message import Message
 from ..communication.mpi.com_manager import MpiCommunicationManager
 from ..communication.mqtt.mqtt_comm_manager import MqttCommManager
 from ..communication.observer import Observer
 
 
-class ClientManager(Observer):
+class ServerManager(Observer):
 
-    def __init__(self, args, comm=None, rank=0, size=0, backend="MPI",
+    def __init__(self, args, comm=None, rank=0, size=0, backend="MQTT",
                  mqtt_host="127.0.0.1", mqtt_port=1883):
         self.args = args
         self.size = size
@@ -19,17 +18,14 @@ class ClientManager(Observer):
 
         self.backend = backend
         if backend == "MPI":
-            self.com_manager = MpiCommunicationManager(comm, rank, size,
-                                                       node_type="server")
+            self.com_manager = MpiCommunicationManager(comm, rank, size, node_type="server")
         elif backend == "MQTT":
             HOST = mqtt_host
             # HOST = "broker.emqx.io"
             PORT = mqtt_port
-            self.com_manager = MqttCommManager(HOST, PORT, client_id=rank,
-                                               client_num=size - 1)
+            self.com_manager = MqttCommManager(HOST, PORT, client_id=rank, client_num=size - 1)
         else:
-            self.com_manager = MpiCommunicationManager(comm, rank, size,
-                                                       node_type="client")
+            self.com_manager = MpiCommunicationManager(comm, rank, size, node_type="server")
         self.com_manager.add_observer(self)
         self.message_handler_dict = dict()
 
@@ -47,14 +43,7 @@ class ClientManager(Observer):
         handler_callback_func(msg_params)
 
     def send_message(self, message):
-        msg = Message()
-        msg.add(Message.MSG_ARG_KEY_TYPE, message.get_type())
-        msg.add(Message.MSG_ARG_KEY_SENDER, message.get_sender_id())
-        msg.add(Message.MSG_ARG_KEY_RECEIVER, message.get_receiver_id())
-        for key, value in message.get_params().items():
-            # logging.info("%s == %s" % (key, value))
-            msg.add(key, value)
-        self.com_manager.send_message(msg)
+        self.com_manager.send_message(message)
 
     @abstractmethod
     def register_message_receive_handlers(self) -> None:
@@ -63,7 +52,7 @@ class ClientManager(Observer):
     def register_message_receive_handler(self, msg_type, handler_callback_func):
         self.message_handler_dict[msg_type] = handler_callback_func
 
-#     def finish(self):
-#         logging.info("__finish server")
-#         if self.backend == "MPI":
-#             MPI.COMM_WORLD.Abort()
+    def finish(self):
+        logging.info("__finish server")
+        if self.backend == "MPI":
+            MPI.COMM_WORLD.Abort()

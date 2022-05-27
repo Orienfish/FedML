@@ -1,0 +1,110 @@
+import logging
+
+import torch
+from torch import nn
+
+try:
+    from fedml_core.trainer.model_trainer import ModelTrainer
+except ImportError:
+    from FedML.fedml_core.trainer.model_trainer import ModelTrainer
+
+
+
+
+class MyModelTrainer(ModelTrainer):
+    
+    # assign initial model and encoder
+    def __init__(self, model):
+        self.encoder, self.classifier = copy.deepcopy(model)
+        self.round = 0;
+        self.id = args.client_uuid
+        self.lr = args.lr
+        self.partition_method = args.partition_method
+
+    # get hypervectors
+    def get_model_params(self):
+        return self.classifier.class_hvs.clone().to(self.device)
+
+    # set hypervectors
+    def set_model_params(self, model_parameters):
+        self.classifier.class_hvs = nn.Parameter(model_parameters, requires_grad=False)
+    
+
+
+    # train
+    def train(self, train_data, device, args):
+
+        self.classifier = self.classifier.to(device)
+        encoder = self.encoder.to(device)
+        
+        self.classifier.train()
+
+        for epoch in range(args.epochs):
+            overall_acc = 0
+            for batch_idx, (x, labels) in enumerate(train_data):
+                x = x.to(self.device)
+                labels = labels.to(device).type(torch.int)
+                x = encoder(x)
+
+                labels_hat = self.classifier(x, labels)
+                
+
+                _, labels_hat = torch.max(labels_hat, dim=1)
+                
+
+                acc = accuracy(labels_hat,labels)
+                
+
+                overall_acc += acc
+
+            overall_acc /= (idx + 1)
+            self.classifier.oneshot = True
+
+        # if noniid, update lr
+        self.round+=1
+        if sle.partition_method=="noniid":
+            self.classifier.alpha = self.lr + (1 / (1 + self.round))
+
+        print("\t Trainning round: {} \t=> client_id: {} accuracy: {}".format(self.round-1,self.id, overall_acc))
+
+
+
+        
+    
+    # test
+    def test(self, test_data, device, args):
+        
+        self.classifier = self.classifier.to(device)
+        encoder = self.encoder.to(device)
+        
+        self.classifier.train()
+
+        overall_acc = 0
+        for batch_idx, (x, target) in enumerate(test_data):
+            x = x.to(self.device)
+            target = target.to(device)
+            
+            x = encoder(x)
+
+
+            y_hat = self.classifier(x)
+            
+            _, y_hat = torch.max(y_hat, dim=1)
+            
+            acc = accuracy(y_hat, target)
+            overall_acc += acc
+
+        overall_acc /= (idx + 1)
+
+        print("\t Testing round: {} \t=> client_id: {} accuracy: {}".format(self.round-1,self.id, overall_acc))
+
+        return overall_acc
+
+
+
+
+        
+
+    # not used
+    def test_on_the_server(self, train_data_local_dict, test_data_local_dict, device, args=None) -> bool:
+        return False

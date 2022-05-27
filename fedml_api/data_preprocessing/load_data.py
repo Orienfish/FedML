@@ -9,7 +9,7 @@ from .cifar10.data_loader import load_cifar10_data, get_dataloader_CIFAR10, get_
 def uniform(N, k):
     """Uniform distribution of 'N' items into 'k' groups."""
     dist = []
-    avg = N / k
+    avg = int(N) / k
     # Make distribution
     for i in range(k):
         dist.append(int((i + 1) * avg) - int(i * avg))

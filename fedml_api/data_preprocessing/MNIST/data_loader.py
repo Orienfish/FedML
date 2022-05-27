@@ -12,6 +12,17 @@ logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+class AddGaussianNoise(object):
+    def __init__(self, mean=0., std=0.05):
+        self.std = std
+        self.mean = mean
+        
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
+
 # generate the non-IID distribution for all methods
 def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/MNIST/distribution.txt'):
     distribution = {}
@@ -53,14 +64,33 @@ def _data_transforms_mnist():
         #transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(MNIST_MEAN, MNIST_STD),
+        #AddGaussianNoise(),
     ])
 
     valid_transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.ToTensor(),
         transforms.Normalize(MNIST_MEAN, MNIST_STD),
+        #AddGaussianNoise(),
     ])
 
+    
+    '''
+    train_transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.ToTensor(),
+        #AddGaussianNoise(),
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1))
+    ])
+
+    valid_transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.ToTensor(),
+        #AddGaussianNoise(),
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1))
+    ])
+    '''
+    
     return train_transform, valid_transform
 
 

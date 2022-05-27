@@ -1,7 +1,7 @@
 import logging
 from abc import abstractmethod
 
-from mpi4py import MPI
+#from mpi4py import MPI
 
 from ..communication.mpi.com_manager import MpiCommunicationManager
 from ..communication.mqtt.mqtt_comm_manager import MqttCommManager

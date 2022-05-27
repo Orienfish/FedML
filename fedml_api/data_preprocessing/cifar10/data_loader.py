@@ -12,6 +12,19 @@ logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
+class AddGaussianNoise(object):
+    def __init__(self, mean=0, std=0.0):
+        self.std = std
+        self.mean = mean
+        
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
+
+
 # generate the non-IID distribution for all methods
 def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/CIFAR10/distribution.txt'):
     distribution = {}
@@ -75,14 +88,16 @@ def _data_transforms_cifar10():
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        #AddGaussianNoise(),
     ])
 
-    train_transform.transforms.append(Cutout(16))
+    #train_transform.transforms.append(Cutout(16))
 
     valid_transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.ToTensor(),
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        #AddGaussianNoise(),
     ])
 
     return train_transform, valid_transform

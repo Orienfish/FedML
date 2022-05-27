@@ -12,6 +12,23 @@ logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
+
+class AddGaussianNoise(object):
+    def __init__(self, mean=0., std=0.0):
+        self.std = std
+        self.mean = mean
+        
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
+
+
+
+
+
 # generate the non-IID distribution for all methods
 def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/CIFAR10/distribution.txt'):
     distribution = {}
@@ -43,7 +60,7 @@ def read_net_dataidx_map(filename='./data_preprocessing/non-iid-distribution/CIF
     return net_dataidx_map
 
 
-def _data_transforms_cifar10():
+def _data_transforms_fashionmnist():
     FashionMNIST_MEAN = [0.5026]
     FashionMNIST_STD = [0.9873]
 
@@ -53,19 +70,41 @@ def _data_transforms_cifar10():
         #transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(FashionMNIST_MEAN, FashionMNIST_STD),
+        #AddGaussianNoise(),
     ])
 
     valid_transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.ToTensor(),
         transforms.Normalize(FashionMNIST_MEAN, FashionMNIST_STD),
+        #AddGaussianNoise(),
     ])
 
+
+    '''
+    train_transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.ToTensor(),
+        #AddGaussianNoise(),
+        #transforms.Normalize((0.1307,), (0.3081,)),
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1))
+    ])
+
+    valid_transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.ToTensor(),
+        #AddGaussianNoise(),
+        #transforms.Normalize((0.1307,), (0.3081,)),
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1))
+    ])
+    '''
+    
+    
     return train_transform, valid_transform
 
 
 def load_fashionmnist_data(datadir):
-    train_transform, test_transform = _data_transforms_cifar10()
+    train_transform, test_transform = _data_transforms_fashionmnist()
 
     fashionmnist_train_ds = FashionMNIST_truncated(datadir, train=True, download=True, transform=train_transform)
     fashionmnist_test_ds = FashionMNIST_truncated(datadir, train=False, download=True, transform=test_transform)
@@ -79,7 +118,7 @@ def load_fashionmnist_data(datadir):
 def get_dataloader_FashionMNIST(datadir, train_bs, test_bs, dataidxs=None):
     dl_obj = FashionMNIST_truncated
 
-    transform_train, transform_test = _data_transforms_cifar10()
+    transform_train, transform_test = _data_transforms_fashionmnist()
 
     train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=True)
     test_ds = dl_obj(datadir, train=False, transform=transform_test, download=True)
@@ -93,7 +132,7 @@ def get_dataloader_FashionMNIST(datadir, train_bs, test_bs, dataidxs=None):
 def get_dataloader_test_FashionMNIST(datadir, train_bs, test_bs, dataidxs_train=None, dataidxs_test=None):
     dl_obj = FashionMNIST_truncated
 
-    transform_train, transform_test = _data_transforms_cifar10()
+    transform_train, transform_test = _data_transforms_fashionmnist()
 
     train_ds = dl_obj(datadir, dataidxs=dataidxs_train, train=True, transform=transform_train, download=True)
     test_ds = dl_obj(datadir, dataidxs=dataidxs_test, train=False, transform=transform_test, download=True)
