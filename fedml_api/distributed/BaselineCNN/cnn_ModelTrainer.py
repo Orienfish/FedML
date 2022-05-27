@@ -37,9 +37,9 @@ class MyModelTrainer(ModelTrainer):
     def train(self, train_data, args):
 
         model = self.classifier.to(self.device)
-        self.classifier.train()
+        model.train()
 
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)#,weight_decay=1e-3)
 
         criterion = nn.CrossEntropyLoss().to(self.device)
 
@@ -51,11 +51,14 @@ class MyModelTrainer(ModelTrainer):
                 #print("TRAINING------------------", batch_idx)
                 x = x.to(self.device)
                 labels = labels.to(self.device).type(torch.long)
+                
                 optimizer.zero_grad()
                 output = model(x)
                 loss = criterion(output, labels)
+                
                 loss.backward()
                 optimizer.step()
+                
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
             print('(Trainer_ID {}. Local Training Epoch: {} \tLoss: {:.6f}'.format(self.id,epoch,sum(epoch_loss) / len(epoch_loss)))
@@ -71,29 +74,29 @@ class MyModelTrainer(ModelTrainer):
         self.classifier.eval()
         
         acc = 0
-        batch_correct = []
+        batch_correct = []        
         
-        criterion = nn.CrossEntropyLoss().to(self.device)
-
-        with torch.no_grad():
-            for batch_idx, (x, target) in enumerate(test_data):
-                if batch_selection!=None and batch_idx not in batch_selection:
-                    continue
-                x = x.to(self.device)
-                target = target.to(self.device)
-                
-                #print("Testing: ",batch_idx)
-                pred = model(x)
-                
-                loss = criterion(pred, target)
-                _, predicted = torch.max(pred, -1)
-                
-                #print(target)
-                #print(predicted)
-                
-                batch_correct.append(predicted.eq(target).sum())
-            acc = sum(batch_correct) / (len(batch_selection)*args.batch_size)
-        print("-----------------------------Test acc: ", str(acc)) 
+        for batch_idx, (x, target) in enumerate(test_data):
+            if batch_selection!=None and batch_idx not in batch_selection:
+                continue
+            #print("Testing:",str(batch_idx))
+            x = x.to(self.device)
+            target = target.to(self.device)
+            
+            outputs = model(x)
+            
+            _, y_hat = outputs.max(1)
+            
+            #print("++++++++++++++++++++++++++++++++++=")
+            #print(y_hat)
+            #print(target)
+            
+            batch_correct.append(accuracy(y_hat, target))
+        
+        
+        acc = sum(batch_correct) / len(batch_selection)        
+        
+        #print("Test acc: ", str(acc))
 
         return acc
 
