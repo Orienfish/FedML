@@ -61,7 +61,6 @@ class BaseCNNClientManager(ClientManager):
 
         self.trainer.update_model(global_cnn_params)
 
-
         self.round_idx += 1
         self.__train()
         if self.round_idx == self.num_rounds - 1:

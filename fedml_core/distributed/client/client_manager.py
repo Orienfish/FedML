@@ -63,7 +63,7 @@ class ClientManager(Observer):
     def register_message_receive_handler(self, msg_type, handler_callback_func):
         self.message_handler_dict[msg_type] = handler_callback_func
 
-#     def finish(self):
-#         logging.info("__finish server")
-#         if self.backend == "MPI":
-#             MPI.COMM_WORLD.Abort()
+    def finish(self):
+        logging.info("__finish server")
+        #if self.backend == "MPI":
+        #    MPI.COMM_WORLD.Abort()
