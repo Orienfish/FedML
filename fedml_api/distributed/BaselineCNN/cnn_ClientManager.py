@@ -37,15 +37,11 @@ class BaseCNNClientManager(ClientManager):
     def handle_message_init(self, msg_params):
         logging.info("handle_message_init_from_server.")
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
+        client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
 
         global_cnn_params = transform_list_to_tensor(global_cnn_params)
 
-        client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
-
         self.trainer.update_model(global_cnn_params)
-
-        self.round_idx = 0
-        self.__train()
 
     
     def start_training(self):
@@ -68,6 +64,7 @@ class BaseCNNClientManager(ClientManager):
             self.finish()
 
     def init_register_to_server(self):
+        logging.info("init_register_to_server.")
         message = Message(MyMessage.MSG_TYPE_C2S_INIT_REGISTER, self.get_sender_id(), 0)
         self.send_message(message)
 
