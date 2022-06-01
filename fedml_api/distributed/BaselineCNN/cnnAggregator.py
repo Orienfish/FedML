@@ -77,9 +77,38 @@ class BaselineCNNAggregator(object):
                     
         self.set_global_model_params(averaged_params)
 
-        #print("Averaged")
-        #print(type(averaged_params))
         return averaged_params
+
+    def aggregate_async(self, model_params, sample_num, staleness):
+        alpha_t = self.args.alpha * self.staleness(staleness)
+        logging.info('{} alpha: {} staleness: {} alpha_t: {}'.format(
+            self.args.staleness_func, self.args.alpha, staleness, alpha_t
+        ))
+
+        global_model_params = self.get_global_model_params()
+        averaged_params = copy.deepcopy(global_model_params)
+        for k in averaged_params.keys():
+            averaged_params[k] = (1 - alpha_t) * global_model_params[k] + \
+                alpha_t * model_params[k]
+
+        self.set_global_model_params(averaged_params)
+
+        # print("Averaged")
+        # print(type(averaged_params))
+        return averaged_params
+
+    def staleness(self, staleness):
+        if self.args.staleness_func == "constant":
+            return 1
+        elif self.args.staleness_func == "polynomial":
+            a = 0.5
+            return pow(staleness+1, -a)
+        elif self.args.staleness_func == "hinge":
+            a, b = 10, 4
+            if staleness <= b:
+                return 1
+            else:
+                return 1 / (a * (staleness - b) + 1)
 
     '''
     # for local test only
