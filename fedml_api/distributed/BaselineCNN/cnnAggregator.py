@@ -12,7 +12,7 @@ from .utils import transform_list_to_tensor
 
 class BaselineCNNAggregator(object):
 
-    def __init__(self,args, train_global, test_global, all_train_data_num,
+    def __init__(self, args, train_global, test_global, all_train_data_num,
                  train_data_local_dict, test_data_local_dict, train_data_local_num_dict,
                  worker_num, device, model_trainer):
 
@@ -28,8 +28,7 @@ class BaselineCNNAggregator(object):
         self.worker_num = worker_num
         self.device = device
         self.args = args
-        
-        
+
         self.model_dict = dict()
         self.sample_num_dict = dict()
         self.flag_client_model_uploaded_dict = dict()
@@ -43,15 +42,11 @@ class BaselineCNNAggregator(object):
     def set_global_model_params(self, model_parameters):
         self.classifier.set_model_params(model_parameters)
 
-
-
     def add_local_trained_result(self, index, model_params, sample_num):
-        logging.info("add_model. index = %d" % index)
+        logging.info("Receive model index = %d" % index)
         self.model_dict[index] = model_params
         self.sample_num_dict[index] = sample_num
         self.flag_client_model_uploaded_dict[index] = True
-
-
 
 
     def check_whether_all_receive(self):
@@ -61,8 +56,6 @@ class BaselineCNNAggregator(object):
         for idx in range(self.worker_num):
             self.flag_client_model_uploaded_dict[idx] = False
         return True
-
-
 
     
     def aggregate(self):
@@ -84,9 +77,38 @@ class BaselineCNNAggregator(object):
                     
         self.set_global_model_params(averaged_params)
 
-        print("Averaged")
-        #print(type(averaged_params))
         return averaged_params
+
+    def aggregate_async(self, model_params, sample_num, staleness):
+        alpha_t = self.args.alpha * self.staleness(staleness)
+        logging.info('{} alpha: {} staleness: {} alpha_t: {}'.format(
+            self.args.staleness_func, self.args.alpha, staleness, alpha_t
+        ))
+
+        global_model_params = self.get_global_model_params()
+        averaged_params = copy.deepcopy(global_model_params)
+        for k in averaged_params.keys():
+            averaged_params[k] = (1 - alpha_t) * global_model_params[k] + \
+                alpha_t * model_params[k]
+
+        self.set_global_model_params(averaged_params)
+
+        # print("Averaged")
+        # print(type(averaged_params))
+        return averaged_params
+
+    def staleness(self, staleness):
+        if self.args.staleness_func == "constant":
+            return 1
+        elif self.args.staleness_func == "polynomial":
+            a = 0.5
+            return pow(staleness+1, -a)
+        elif self.args.staleness_func == "hinge":
+            a, b = 10, 4
+            if staleness <= b:
+                return 1
+            else:
+                return 1 / (a * (staleness - b) + 1)
 
     '''
     # for local test only
@@ -116,9 +138,7 @@ class BaselineCNNAggregator(object):
     '''
 
 
-
-    def test_on_server_for_all_clients(self,round_idx,batch_selection=None):
-        print("Round: ", round_idx)
+    def test_on_server_for_all_clients(self, round_idx, batch_selection=None):
         accuracy = self.classifier.test(self.test_global, self.args, batch_selection)
         return accuracy
 

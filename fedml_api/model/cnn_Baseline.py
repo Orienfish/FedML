@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
-from pl_bolts.models.self_supervised import SimCLR
+#from pl_bolts.models.self_supervised import SimCLR
 
 '''
 class CNN_MNIST(nn.Module):

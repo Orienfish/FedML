@@ -39,6 +39,7 @@ class ServerManager(Observer):
     def receive_message(self, msg_type, msg_params) -> None:
         # logging.info("receive_message. rank_id = %d, msg_type = %s. msg_params = %s" % (
         #     self.rank, str(msg_type), str(msg_params.get_content())))
+        logging.info("receive_message. rank_id = %d, msg_type = %s" % (self.rank, str(msg_type)))
         handler_callback_func = self.message_handler_dict[msg_type]
         handler_callback_func(msg_params)
 
@@ -54,5 +55,5 @@ class ServerManager(Observer):
 
     def finish(self):
         logging.info("__finish server")
-        if self.backend == "MPI":
-            MPI.COMM_WORLD.Abort()
+        # if self.backend == "MPI":
+        #    MPI.COMM_WORLD.Abort()

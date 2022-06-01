@@ -55,19 +55,19 @@ class MqttCommManager(BaseCommunicationManager):
             receiving message topic (subscribe): serverID_clientID
 
         """
-        print("Connection returned with result code:" + str(rc))
+        logging.info("_on_connect: Connection returned with result code: {}".format(str(rc)))
         # subscribe one topic
         if self.client_id == 0:
             # server
             for client_ID in range(1, self.client_num+1):
                 result, mid = self._client.subscribe(self._topic + str(client_ID), 0)
                 self._unacked_sub.append(mid)
-                print(result)
+                # print(result)
         else:
             # client
             result, mid = self._client.subscribe(self._topic + str(0) + "_" + str(self.client_id), 0)
             self._unacked_sub.append(mid)
-            print(result)
+            # print(result)
 
     def _on_message(self, client, userdata, msg):
         msg.payload = str(msg.payload, encoding='utf-8')
@@ -76,10 +76,10 @@ class MqttCommManager(BaseCommunicationManager):
 
     @staticmethod
     def _on_disconnect(client, userdata, rc):
-        print("Disconnection returned result:" + str(rc))
+        logging.info("Disconnection returned result: {}".format(rc))
 
     def _on_subscribe(self, client, userdata, mid, granted_qos):
-        print("onSubscribe :" + str(mid))
+        logging.info("onSubscribe: {}".format(str(mid)))
         self._unacked_sub.remove(mid)
 
     def add_observer(self, observer: Observer):
