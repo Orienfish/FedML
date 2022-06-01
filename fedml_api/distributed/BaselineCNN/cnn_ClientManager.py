@@ -38,6 +38,7 @@ class BaseCNNClientManager(ClientManager):
         logging.info("handle_message_init_from_server.")
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
+        self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
         global_cnn_params = transform_list_to_tensor(global_cnn_params)
 
@@ -53,6 +54,7 @@ class BaseCNNClientManager(ClientManager):
         logging.info("handle_message_receive_model_from_server.")
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
+        self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
         
         global_cnn_params = transform_list_to_tensor(global_cnn_params)
 
@@ -75,6 +77,7 @@ class BaseCNNClientManager(ClientManager):
         message = Message(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER, self.get_sender_id(), receive_id)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, cnn_params)
         message.add_params(MyMessage.MSG_ARG_KEY_NUM_SAMPLES, local_sample_num)
+        message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.download_epoch)
         self.send_message(message)
 
     def __train(self):
