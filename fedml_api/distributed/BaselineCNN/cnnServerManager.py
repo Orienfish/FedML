@@ -45,16 +45,21 @@ class BaselineCNNServerManager(ServerManager):
 
     def send_init_msg(self):
         global_model_params = self.aggregator.get_global_model_params()
-        for process_id in range(1, self.size):
-            self.send_message_init_config(process_id, global_model_params)
+        for receiver_id in range(1, self.size):
+            self.send_message_init_config(receiver_id, global_model_params, 0)
 
     def register_message_receive_handlers(self):
         self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
                                               self.handle_message_receive_model_from_client)
+        self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_INIT_REGISTER,
+                                              self.handle_init_register_from_client)
 
     def handle_message_receive_model_from_client(self, msg_params):
-        # Record the round delay
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
+        logging.info("handle_message_receive_model_from_client "
+                     "sender_id = {}".format(sender_id))
+
+        # Record the round delay
         self.round_delay = time.time() - self.round_start_time[sender_id - 1]
 
         # Receive the information from clients
@@ -95,8 +100,19 @@ class BaselineCNNServerManager(ServerManager):
                 self.send_message_sync_model_to_client(receiver_id,
                                                        client_indexes[receiver_id - 1])
 
+    def handle_init_register_from_client(self, msg_params):
+        sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
+        logging.info("handle_init_register_from_client "
+                     "sender_id = {}".format(sender_id))
+
+        # Sync the same initial global model with the client
+        global_model_params = self.aggregator.get_global_model_params()
+        self.send_message_init_config(sender_id, global_model_params, 0)
+
     def send_message_init_config(self, receive_id, global_model_params, client_index):
-        
+        logging.info("send_message_init_to_client. "
+                     "receive_id = {} client_idx = {}".format(receive_id, client_index))
+        self.round_start_time[receive_id - 1] = time.time()
         global_model_params = transform_tensor_to_list(global_model_params)
 
         message = Message(MyMessage.MSG_TYPE_S2C_INIT_CONFIG, self.get_sender_id(), receive_id)

@@ -9,6 +9,7 @@ class MyMessage(object):
     # client to server
     MSG_TYPE_C2S_SEND_MODEL_TO_SERVER = 3
     MSG_TYPE_C2S_SEND_STATS_TO_SERVER = 4
+    MSG_TYPE_C2S_INIT_REGISTER = 5
 
     MSG_ARG_KEY_TYPE = "msg_type"
     MSG_ARG_KEY_SENDER = "sender"
