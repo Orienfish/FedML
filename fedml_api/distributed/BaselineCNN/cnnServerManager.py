@@ -80,6 +80,7 @@ class BaselineCNNServerManager(ServerManager):
             logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
                                                                 cur_time,
                                                                 accuracy))
+            logging.info('#########################################\n')
 
             # Tensoboard logger
             self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
