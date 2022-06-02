@@ -65,11 +65,16 @@ class MyModelTrainer(ModelTrainer):
                 optimizer.step()
 
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
-            epoch_l2_loss.append(sum(batch_l2_loss) / len(batch_l2_loss))
-            print('Epoch: [{}/{}]\tLoss: {:.6f}\t'
-                  'L2 Loss: {:.6f}'.format(epoch, args.epochs,
-                                           sum(epoch_loss) / len(epoch_loss),
-                                           sum(epoch_l2_loss) / len(epoch_l2_loss)))
+
+            if len(batch_l2_loss) > 0:
+                epoch_l2_loss.append(sum(batch_l2_loss) / len(batch_l2_loss))
+                print('Epoch: [{}/{}]\tLoss: {:.6f}\t'
+                      'L2 Loss: {:.6f}'.format(epoch, args.epochs,
+                                               sum(epoch_loss) / len(epoch_loss),
+                                               sum(epoch_l2_loss) / len(epoch_l2_loss)))
+            else:
+                print('Epoch: [{}/{}]\tLoss: {:.6f}'.format(epoch, args.epochs,
+                                                            sum(epoch_loss) / len(epoch_loss)))
             self.loss = sum(epoch_loss) / len(epoch_loss)
 
     
