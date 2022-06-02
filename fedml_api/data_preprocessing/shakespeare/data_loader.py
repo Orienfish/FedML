@@ -4,47 +4,46 @@ import os
 import numpy as np
 import torch
 
-from .language_utils import word_to_indices, VOCAB_SIZE, \
-    letter_to_index
+from torch.utils.data import Dataset
+
+from .language_utils import word_to_indices, VOCAB_SIZE, letter_to_index
 
 
 def read_data(train_data_dir, test_data_dir):
-    '''parses data in given train and test data directories
-
+    """parses data in given train and test data directories
     assumes:
-    - the data in the input directories are .json files with 
+    - the data in the input directories are .json files with
         keys 'users' and 'user_data'
     - the set of train set users is the same as the set of test set users
-
     Return:
         clients: list of client ids
         groups: list of group ids; empty list if none found
         train_data: dictionary of train data
         test_data: dictionary of test data
-    '''
+    """
     clients = []
     groups = []
     train_data = {}
     test_data = {}
 
     train_files = os.listdir(train_data_dir)
-    train_files = [f for f in train_files if f.endswith('.json')]
+    train_files = [f for f in train_files if f.endswith(".json")]
     for f in train_files:
         file_path = os.path.join(train_data_dir, f)
-        with open(file_path, 'r') as inf:
+        with open(file_path, "r") as inf:
             cdata = json.load(inf)
-        clients.extend(cdata['users'])
-        if 'hierarchies' in cdata:
-            groups.extend(cdata['hierarchies'])
-        train_data.update(cdata['user_data'])
+        clients.extend(cdata["users"])
+        if "hierarchies" in cdata:
+            groups.extend(cdata["hierarchies"])
+        train_data.update(cdata["user_data"])
 
     test_files = os.listdir(test_data_dir)
-    test_files = [f for f in test_files if f.endswith('.json')]
+    test_files = [f for f in test_files if f.endswith(".json")]
     for f in test_files:
         file_path = os.path.join(test_data_dir, f)
-        with open(file_path, 'r') as inf:
+        with open(file_path, "r") as inf:
             cdata = json.load(inf)
-        test_data.update(cdata['user_data'])
+        test_data.update(cdata["user_data"])
 
     clients = list(sorted(train_data.keys()))
 
@@ -62,12 +61,12 @@ def process_y(raw_y_batch):
 
 
 def batch_data(data, batch_size):
-    '''
+    """
     data is a dict := {'x': [numpy array], 'y': [numpy array]} (on one client)
     returns x, y, which are both numpy array of length: batch_size
-    '''
-    data_x = data['x']
-    data_y = data['y']
+    """
+    data_x = data["x"]
+    data_y = data["y"]
 
     # randomly shuffle data
     np.random.seed(100)
@@ -79,8 +78,8 @@ def batch_data(data, batch_size):
     # loop through mini-batches
     batch_data = list()
     for i in range(0, len(data_x), batch_size):
-        batched_x = data_x[i:i + batch_size]
-        batched_y = data_y[i:i + batch_size]
+        batched_x = data_x[i : i + batch_size]
+        batched_y = data_y[i : i + batch_size]
         batched_x = torch.from_numpy(np.asarray(process_x(batched_x)))
         batched_y = torch.from_numpy(np.asarray(process_y(batched_y)))
         batch_data.append((batched_x, batched_y))
@@ -88,8 +87,8 @@ def batch_data(data, batch_size):
 
 
 def load_partition_data_shakespeare(batch_size):
-    train_path = "../../../data/shakespeare/train"
-    test_path = "../../../data/shakespeare/test"
+    train_path = "data/shakespeare/train"
+    test_path = "data/shakespeare/test"
     users, groups, train_data, test_data = read_data(train_path, test_path)
 
     if len(groups) == 0:
@@ -103,8 +102,8 @@ def load_partition_data_shakespeare(batch_size):
     test_data_global = list()
     client_idx = 0
     for u, g in zip(users, groups):
-        user_train_data_num = len(train_data[u]['x'])
-        user_test_data_num = len(test_data[u]['x'])
+        user_train_data_num = len(train_data[u]["x"])
+        user_test_data_num = len(test_data[u]["x"])
         train_data_num += user_train_data_num
         test_data_num += user_test_data_num
         train_data_local_num_dict[client_idx] = user_train_data_num
@@ -122,5 +121,77 @@ def load_partition_data_shakespeare(batch_size):
     client_num = client_idx
     output_dim = VOCAB_SIZE
 
-    return client_num, train_data_num, test_data_num, train_data_global, test_data_global, \
-           train_data_local_num_dict, train_data_local_dict, test_data_local_dict, output_dim
+    return (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        train_data_local_num_dict,
+        train_data_local_dict,
+        test_data_local_dict,
+        output_dim,
+    )
+    
+    
+    
+
+class shakespeare_loader(Dataset):
+    def __init__(self,single_client_data):
+        self.batch_num = len(single_client_data)
+        self.sample_num = 0
+        self.x = []
+        self.y = []
+        for batch_idx in range(self.batch_num):
+            batch = single_client_data[batch_idx]
+            self.x.append(batch[0])
+            self.y.append(batch[1])
+            self.sample_num += len(batch[0])
+
+
+    def __len__(self):
+        return self.sample_num
+         
+    def __getitem__(self,index):
+        return (self.x[index],self.y[index])
+
+
+
+def get_dataloader(batch_size):
+    (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        train_data_local_num_dict,
+        train_data_local_dict,
+        test_data_local_dict,
+        output_dim,
+    ) = load_partition_data_shakespeare(batch_size)
+    
+    train_loaders = []
+    test_loaders = []
+    
+    for loader_idx in range(client_num):
+        train_loaders.append(shakespeare_loader(train_data_local_dict[loader_idx]))
+        test_loaders.append(shakespeare_loader(test_data_local_dict[loader_idx]))
+    
+    return (train_loaders,test_loaders)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

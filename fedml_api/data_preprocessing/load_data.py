@@ -6,6 +6,8 @@ from .MNIST.data_loader import load_mnist_data, get_dataloader_MNIST, get_datalo
 from .FashionMNIST.data_loader import load_fashionmnist_data, get_dataloader_FashionMNIST, get_dataloader_test_FashionMNIST
 from .cifar10.data_loader import load_cifar10_data, get_dataloader_CIFAR10, get_dataloader_test_CIFAR10
 
+from .shakespeare.data_loader import load_partition_data_shakespeare
+
 def uniform(N, k):
     """Uniform distribution of 'N' items into 'k' groups."""
     dist = []
