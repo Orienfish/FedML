@@ -27,6 +27,7 @@ class BaselineCNNServerManager(ServerManager):
         super().__init__(args, comm, rank, size, backend, mqtt_host, mqtt_port)
         self.args = args
         self.aggregator = aggregator
+        self.worker_num = args.client_num_in_total
         self.round_num = args.comm_round
         self.round_idx = 0
         self.is_preprocessed = is_preprocessed
@@ -34,11 +35,13 @@ class BaselineCNNServerManager(ServerManager):
 
         # For results records
         self.start_time = time.time()
-        self.round_start_time = [0.0 for _ in range(args.client_num_in_total)]
-        self.round_delay = [0.0 for _ in range(args.client_num_in_total)]
+        self.round_start_time = [0.0 for _ in range(self.worker_num)]
+        self.round_delay = [0.0 for _ in range(self.worker_num)]
         self.delay_log = os.path.join(args.result_dir, 'delay.txt')
         self.acc_log = os.path.join(args.result_dir, 'acc.txt')
         self.tb_logger = logger
+
+        self.finish = [False for _ in range(self.worker_num)]
 
     def run(self):
         super().run()
@@ -46,11 +49,13 @@ class BaselineCNNServerManager(ServerManager):
     def send_init_msg(self):
         global_model_params = self.aggregator.get_global_model_params()
         for receiver_id in range(1, self.size):
-            self.send_message_init_config(receiver_id, global_model_params, 0)
+            self.send_message_init_to_client(receiver_id, global_model_params, 0)
 
     def register_message_receive_handlers(self):
         self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_INIT_REGISTER,
                                               self.handle_init_register_from_client)
+        self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_FINISH,
+                                              self.handle_finish_from_client)
 
         if self.args.method == 'fedavg':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
@@ -97,14 +102,14 @@ class BaselineCNNServerManager(ServerManager):
             # start the next round
             self.round_idx += 1
             if self.round_idx == self.round_num:
-                self.finish()
-                return
-            
-            client_indexes = [self.round_idx] * self.args.client_num_per_round
+                for receiver_id in range(1, self.size):
+                    self.send_message_finish_to_client(receiver_id)
+            else:
+                client_indexes = [self.round_idx] * self.args.client_num_per_round
 
-            for receiver_id in range(1, self.size):
-                self.send_message_sync_model_to_client(receiver_id,
-                                                       client_indexes[receiver_id - 1])
+                for receiver_id in range(1, self.size):
+                    self.send_message_sync_model_to_client(receiver_id,
+                                                           client_indexes[receiver_id - 1])
 
     def handle_message_receive_model_from_client_async(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -140,12 +145,12 @@ class BaselineCNNServerManager(ServerManager):
         self.log(cur_time, test_loss, accuracy)
 
         if self.round_idx == self.round_num:
-            self.finish()
-            return
-
-        for receiver_id in range(1, self.size):
-            self.send_message_sync_model_to_client(receiver_id,
-                                                   self.round_idx)
+            for receiver_id in range(1, self.size):
+                self.send_message_finish_to_client(receiver_id)
+        else:
+            for receiver_id in range(1, self.size):
+                self.send_message_sync_model_to_client(receiver_id,
+                                                       self.round_idx)
 
     def handle_init_register_from_client(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -154,9 +159,20 @@ class BaselineCNNServerManager(ServerManager):
 
         # Sync the same initial global model with the client
         global_model_params = self.aggregator.get_global_model_params()
-        self.send_message_init_config(sender_id, global_model_params, 0)
+        self.send_message_init_to_client(sender_id, global_model_params, 0)
 
-    def send_message_init_config(self, receive_id, global_model_params, client_index):
+    def handle_finish_from_client(self, msg_params):
+        sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
+        logging.info("handle_finish_from_client "
+                     "sender_id = {}".format(sender_id))
+        self.finish[sender_id - 1] = True
+
+        finish_num = sum(self.finish)
+        print(finish_num, self.worker_num)
+        if finish_num >= self.worker_num:
+            super().finish()
+
+    def send_message_init_to_client(self, receive_id, global_model_params, client_index):
         logging.info("send_message_init_to_client. "
                      "receive_id = {} client_idx = {}".format(receive_id, client_index))
         self.round_start_time[receive_id - 1] = time.time()
@@ -181,6 +197,13 @@ class BaselineCNNServerManager(ServerManager):
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, global_model_params)
         message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_INDEX, str(client_index))
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.round_idx)
+        self.send_message(message)
+
+    def send_message_finish_to_client(self, receive_id):
+        logging.info("send_message_finish_to_client. "
+                     "receive_id = {}".format(receive_id))
+
+        message = Message(MyMessage.MSG_TYPE_S2C_FINISH, self.get_sender_id(), receive_id)
         self.send_message(message)
 
     def log(self, cur_time, test_loss, accuracy):
