@@ -30,6 +30,17 @@ class MyModelTrainer(ModelTrainer):
 
     # train
     def train(self, train_data, args):
+        if args.dataset == "cifar10" or "mnist" or "fashionmnist":
+            print("Train func: train_cifar10_mnist_fashionmnist")
+            self.train_cifar10_mnist_fashionmnist(train_data, args)
+        elif args.dataset == "shakespeare":
+            print("Train func: train_shakespeare")
+            self.train_shakespeare(train_data, args)
+        else:
+            print("Unimplemented")
+
+
+    def train_cifar10_mnist_fashionmnist(self, train_data, args):
         old_model = copy.deepcopy(self.classifier)
         old_model.to(self.device)
         old_model.eval()
@@ -50,8 +61,8 @@ class MyModelTrainer(ModelTrainer):
                 loss = criterion(outputs, y)
 
                 # Add regularization
-                l2_loss = 0.0
                 if args.method == 'fedasync':
+                    l2_loss = 0.0
                     for paramA, paramB in zip(model.parameters(),
                                               old_model.parameters()):
                         l2_loss += args.rou / 2 * \
@@ -65,16 +76,31 @@ class MyModelTrainer(ModelTrainer):
                 optimizer.step()
 
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
-            epoch_l2_loss.append(sum(batch_l2_loss) / len(batch_l2_loss))
-            print('Epoch: [{}/{}]\tLoss: {:.6f}\t'
-                  'L2 Loss: {:.6f}'.format(epoch, args.epochs,
-                                           sum(epoch_loss) / len(epoch_loss),
-                                           sum(epoch_l2_loss) / len(epoch_l2_loss)))
+
+            if len(batch_l2_loss) > 0:
+                epoch_l2_loss.append(sum(batch_l2_loss) / len(batch_l2_loss))
+                print('Epoch: [{}/{}]\tLoss: {:.6f}\t'
+                      'L2 Loss: {:.6f}'.format(epoch, args.epochs,
+                                               sum(epoch_loss) / len(epoch_loss),
+                                               sum(epoch_l2_loss) / len(epoch_l2_loss)))
+            else:
+                print('Epoch: [{}/{}]\tLoss: {:.6f}'.format(epoch, args.epochs,
+                                                                sum(epoch_loss) / len(epoch_loss)))
             self.loss = sum(epoch_loss) / len(epoch_loss)
 
     
     # test
     def test(self, test_data, args, batch_selection):
+        if args.dataset == "cifar10" or "mnist" or "fashionmnist":
+            print("Test func: test_cifar10_mnist_fashionmnist")
+            return(self.test_cifar10_mnist_fashionmnist(test_data, args, batch_selection))
+        elif args.dataset == "shakespeare":
+            print("Test func: test_shakespeare")
+            return(self.test_shakespeare(test_data, args, batch_selection))
+        else:
+            print("Unimplemented")
+
+    def test_cifar10_mnist_fashionmnist(self, test_data, args, batch_selection):
         
         model = self.classifier.to(self.device)
         self.classifier.eval()
@@ -82,17 +108,20 @@ class MyModelTrainer(ModelTrainer):
 
         test_loss = 0
         correct = 0
-        total = len(test_data.dataset)
+
+        total = args.batch_size * len(batch_selection)
         for batch_idx, (x, y) in enumerate(test_data):
             if batch_selection is not None and batch_idx not in batch_selection:
                 continue
 
-            x, y = x.to(self.device), y.to(self.device)
+            x, y = x.to(self.device), y.to(self.device).type(torch.long)
             outputs = model(x)
 
             test_loss += criterion(outputs, y).item()
 
             _, y_hat = outputs.max(1)
+
+
             correct += y_hat.eq(y).sum().item()
 
         test_loss /= len(test_data)
