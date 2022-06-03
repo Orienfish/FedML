@@ -50,8 +50,8 @@ class MyModelTrainer(ModelTrainer):
                 loss = criterion(outputs, y)
 
                 # Add regularization
-                l2_loss = 0.0
                 if args.method == 'fedasync':
+                    l2_loss = 0.0
                     for paramA, paramB in zip(model.parameters(),
                                               old_model.parameters()):
                         l2_loss += args.rou / 2 * \

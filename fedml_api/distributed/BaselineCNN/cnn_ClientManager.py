@@ -43,12 +43,8 @@ class BaseCNNClientManager(ClientManager):
         global_cnn_params = transform_list_to_tensor(global_cnn_params)
 
         self.trainer.update_model(global_cnn_params)
-
-    
-    def start_training(self):
         self.round_idx = 0
         self.__train()
-    
 
     def handle_message_receive_model_from_server(self, msg_params):
         logging.info("handle_message_receive_model_from_server.")
