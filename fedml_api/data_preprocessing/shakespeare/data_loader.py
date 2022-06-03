@@ -86,9 +86,9 @@ def batch_data(data, batch_size):
     return batch_data
 
 
-def load_partition_data_shakespeare(batch_size):
-    train_path = "data/shakespeare/train"
-    test_path = "data/shakespeare/test"
+def load_partition_data_shakespeare(batch_size,dataset_dir):
+    train_path = dataset_dir+"/train"
+    test_path = dataset_dir+"/test"
     users, groups, train_data, test_data = read_data(train_path, test_path)
 
     if len(groups) == 0:
@@ -157,7 +157,7 @@ class shakespeare_loader(Dataset):
 
 
 
-def get_dataloader(batch_size):
+def get_shakespeare_dataloader(batch_size,dataset_dir):
     (
         client_num,
         train_data_num,
@@ -168,7 +168,7 @@ def get_dataloader(batch_size):
         train_data_local_dict,
         test_data_local_dict,
         output_dim,
-    ) = load_partition_data_shakespeare(batch_size)
+    ) = load_partition_data_shakespeare(batch_size,dataset_dir)
     
     train_loaders = []
     test_loaders = []
@@ -177,8 +177,17 @@ def get_dataloader(batch_size):
         train_loaders.append(shakespeare_loader(train_data_local_dict[loader_idx]))
         test_loaders.append(shakespeare_loader(test_data_local_dict[loader_idx]))
     
-    return (train_loaders,test_loaders)
-
+    return (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        train_data_local_num_dict,
+        train_loaders,
+        test_loaders,
+        output_dim,
+    )
 
 
 
