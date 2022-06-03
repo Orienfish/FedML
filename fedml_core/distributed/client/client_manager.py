@@ -1,5 +1,6 @@
 import logging
 from abc import abstractmethod
+import os, signal
 
 # from mpi4py import MPI
 
@@ -41,8 +42,8 @@ class ClientManager(Observer):
         return self.rank
 
     def receive_message(self, msg_type, msg_params) -> None:
-        # logging.info("receive_message. rank_id = %d, msg_type = %s. msg_params = %s" % (
-        #     self.rank, str(msg_type), str(msg_params.get_content())))
+        logging.info("receive_message. rank_id = %d, msg_type = %s" % (
+             self.rank, str(msg_type)))
         handler_callback_func = self.message_handler_dict[msg_type]
         handler_callback_func(msg_params)
 
@@ -64,6 +65,17 @@ class ClientManager(Observer):
         self.message_handler_dict[msg_type] = handler_callback_func
 
     def finish(self):
+        for _ in range(1000):
+            pass
         logging.info("__finish server")
         #if self.backend == "MPI":
         #    MPI.COMM_WORLD.Abort()
+
+        try:
+            for line in os.popen('ps aux | grep fedcnn_rpi_client.py | grep -v grep'):
+                fields = line.split()
+                pid = fields[1]
+                print('extracted pid: ', pid)
+                os.kill(int(pid), signal.SIGKILL)
+        except:
+            print('Error encountered while running killing script')
