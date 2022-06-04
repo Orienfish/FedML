@@ -170,9 +170,8 @@ class BaselineCNNServerManager(ServerManager):
             global running
             running = False
         else:
-            for receiver_id in range(1, self.size):
-                self.send_message_sync_model_to_client(receiver_id,
-                                                       self.round_idx)
+            self.send_message_sync_model_to_client(sender_id,
+                                                   self.round_idx)
 
     def handle_init_register_from_client(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
