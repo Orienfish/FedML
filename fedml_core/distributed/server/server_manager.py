@@ -59,12 +59,3 @@ class ServerManager(Observer):
         logging.info("__finish server")
         # if self.backend == "MPI":
         #    MPI.COMM_WORLD.Abort()
-
-        try:
-            for line in os.popen('ps aux | grep app_CNN.py | grep -v grep'):
-                fields = line.split()
-                pid = fields[1]
-                print('extracted pid: ', pid)
-                os.kill(int(pid), signal.SIGKILL)
-        except:
-            print('Error encountered while running killing script')

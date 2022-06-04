@@ -4,6 +4,8 @@ import sys
 import torch
 import time
 import numpy as np
+import signal
+import threading
 
 from .message_define import MyMessage
 
@@ -18,6 +20,21 @@ except ModuleNotFoundError: # except ImportError
 
 from .utils import transform_list_to_tensor
 from .utils import transform_tensor_to_list
+
+running = True
+def terminate():
+    while True:
+        time.sleep(10)
+        # print('hello')
+        if not running:
+            try:
+                for line in os.popen('ps aux | grep app_CNN.py | grep -v grep'):
+                    fields = line.split()
+                    pid = fields[1]
+                    print('extracted pid: ', pid)
+                    os.kill(int(pid), signal.SIGKILL)
+            except:
+                print('Error encountered while running killing script')
 
 
 class BaselineCNNServerManager(ServerManager):
@@ -45,6 +62,9 @@ class BaselineCNNServerManager(ServerManager):
 
     def run(self):
         super().run()
+        # Create a thread to monitor running status and kill the program at the end
+        x = threading.Thread(target=terminate)
+        x.start()
 
     def send_init_msg(self):
         global_model_params = self.aggregator.get_global_model_params()
@@ -54,8 +74,6 @@ class BaselineCNNServerManager(ServerManager):
     def register_message_receive_handlers(self):
         self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_INIT_REGISTER,
                                               self.handle_init_register_from_client)
-        self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_FINISH,
-                                              self.handle_finish_from_client)
 
         if self.args.method == 'fedavg':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
@@ -104,6 +122,8 @@ class BaselineCNNServerManager(ServerManager):
             if self.round_idx == self.round_num:
                 for receiver_id in range(1, self.size):
                     self.send_message_finish_to_client(receiver_id)
+                global running
+                running = False
             else:
                 client_indexes = [self.round_idx] * self.args.client_num_per_round
 
@@ -144,9 +164,11 @@ class BaselineCNNServerManager(ServerManager):
         # Delay and accuracy logger
         self.log(cur_time, test_loss, accuracy)
 
-        if self.round_idx == self.round_num:
+        if self.round_idx >= self.round_num:
             for receiver_id in range(1, self.size):
                 self.send_message_finish_to_client(receiver_id)
+            global running
+            running = False
         else:
             for receiver_id in range(1, self.size):
                 self.send_message_sync_model_to_client(receiver_id,
@@ -160,17 +182,6 @@ class BaselineCNNServerManager(ServerManager):
         # Sync the same initial global model with the client
         global_model_params = self.aggregator.get_global_model_params()
         self.send_message_init_to_client(sender_id, global_model_params, 0)
-
-    def handle_finish_from_client(self, msg_params):
-        sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
-        logging.info("handle_finish_from_client "
-                     "sender_id = {}".format(sender_id))
-        self.finish[sender_id - 1] = True
-
-        finish_num = sum(self.finish)
-        print(finish_num, self.worker_num)
-        if finish_num >= self.worker_num:
-            super().finish()
 
     def send_message_init_to_client(self, receive_id, global_model_params, client_index):
         logging.info("send_message_init_to_client. "
