@@ -1,6 +1,7 @@
 import logging
 from abc import abstractmethod
-import os, signal
+import os
+import signal
 
 # from mpi4py import MPI
 
@@ -47,7 +48,7 @@ class ClientManager(Observer):
         handler_callback_func = self.message_handler_dict[msg_type]
         handler_callback_func(msg_params)
 
-    def send_message(self, message):
+    def send_message(self, message, qos=0):
         msg = Message()
         msg.add(Message.MSG_ARG_KEY_TYPE, message.get_type())
         msg.add(Message.MSG_ARG_KEY_SENDER, message.get_sender_id())
@@ -55,7 +56,7 @@ class ClientManager(Observer):
         for key, value in message.get_params().items():
             # logging.info("%s == %s" % (key, value))
             msg.add(key, value)
-        self.com_manager.send_message(msg)
+        self.com_manager.send_message(msg, qos=qos)
 
     @abstractmethod
     def register_message_receive_handlers(self) -> None:
@@ -65,9 +66,7 @@ class ClientManager(Observer):
         self.message_handler_dict[msg_type] = handler_callback_func
 
     def finish(self):
-        for _ in range(1000):
-            pass
-        logging.info("__finish server")
+        logging.info("__finish client")
         #if self.backend == "MPI":
         #    MPI.COMM_WORLD.Abort()
 

@@ -62,9 +62,6 @@ class BaseCNNClientManager(ClientManager):
 
     def handle_message_finish_from_server(self, msg_params):
         logging.info("handle_message_finish from server.")
-        message = Message(MyMessage.MSG_TYPE_C2S_FINISH,
-                          self.get_sender_id(), 0)
-        self.send_message(message)
         self.finish()
 
     def send_register_to_server(self):

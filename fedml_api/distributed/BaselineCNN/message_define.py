@@ -11,7 +11,6 @@ class MyMessage(object):
     MSG_TYPE_C2S_SEND_MODEL_TO_SERVER = 5
     MSG_TYPE_C2S_SEND_STATS_TO_SERVER = 6
     MSG_TYPE_C2S_INIT_REGISTER = 7
-    MSG_TYPE_C2S_FINISH = 8
 
     MSG_ARG_KEY_TYPE = "msg_type"
     MSG_ARG_KEY_SENDER = "sender"

@@ -96,7 +96,7 @@ class MqttCommManager(BaseCommunicationManager):
         for observer in self._observers:
             observer.receive_message(msg_type, msg_params)
 
-    def send_message(self, msg: Message):
+    def send_message(self, msg: Message, qos=0):
         """
             [server]
             sending message topic (publish): serverID_clientID
@@ -113,11 +113,12 @@ class MqttCommManager(BaseCommunicationManager):
             topic = self._topic + str(0) + "_" + str(receiver_id)
             logging.info("topic = %s" % str(topic))
             payload = msg.to_json()
-            self._client.publish(topic, payload=payload)
+            self._client.publish(topic, payload=payload, qos=qos)
             logging.info("sent")
         else:
             # client
-            self._client.publish(self._topic + str(self.client_id), payload=msg.to_json())
+            self._client.publish(self._topic + str(self.client_id),
+                                 payload=msg.to_json())
             logging.info("published")
 
     def handle_receive_message(self):
