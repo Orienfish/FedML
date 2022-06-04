@@ -172,7 +172,9 @@ def get_shakespeare_dataloader(batch_size,dataset_dir):
     
     train_loaders = []
     test_loaders = []
-    
+
+    test_data_global = shakespeare_loader(test_data_global)
+
     for loader_idx in range(client_num):
         train_loaders.append(shakespeare_loader(train_data_local_dict[loader_idx]))
         test_loaders.append(shakespeare_loader(test_data_local_dict[loader_idx]))
