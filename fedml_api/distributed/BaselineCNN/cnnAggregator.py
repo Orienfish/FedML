@@ -57,7 +57,7 @@ class BaselineCNNAggregator(object):
             self.flag_client_model_uploaded_dict[idx] = False
         return True
 
-    '''
+
     def aggregate(self):
         model_list = []
         local_sample_number = self.args.data_size_per_client
@@ -78,7 +78,7 @@ class BaselineCNNAggregator(object):
         self.set_global_model_params(averaged_params)
 
         return averaged_params
-        '''
+        
 
     def aggregate_async(self, model_params, sample_num, staleness):
         alpha_t = self.args.alpha * self.staleness(staleness)
@@ -111,7 +111,7 @@ class BaselineCNNAggregator(object):
             else:
                 return 1 / (a * (staleness - b) + 1)
 
-    
+    '''
     # for local test only
     def aggregate(self,client_model_list):
         model_list = []
@@ -136,7 +136,7 @@ class BaselineCNNAggregator(object):
 
         print("Averaged")
         return averaged_params
-
+    '''
 
 
     def test_on_server_for_all_clients(self, round_idx, batch_selection=None):
