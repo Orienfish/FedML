@@ -87,7 +87,7 @@ class MyModelTrainer(ModelTrainer):
 
         test_loss = 0
         correct = 0
-        total = len(test_data.dataset)
+        total = 0
         for batch_idx, (x, y) in enumerate(test_data):
             if batch_selection is not None and batch_idx not in batch_selection:
                 continue
@@ -99,6 +99,7 @@ class MyModelTrainer(ModelTrainer):
 
             _, y_hat = outputs.max(1)
             correct += y_hat.eq(y).sum().item()
+            total += y.size(0)
 
         test_loss /= len(test_data)
         acc = correct / total
