@@ -28,9 +28,15 @@ class MyModelTrainer(ModelTrainer):
     def set_model_params(self, model_parameters):
         self.classifier.load_state_dict(model_parameters)
 
+
+
+
+
+
+
     # train
     def train(self, train_data, args):
-        if args.dataset == "cifar10" or "mnist" or "fashionmnist":
+        if args.dataset == "cifar10" or args.dataset == "mnist" or args.dataset == "fashionmnist":
             print("Train func: train_cifar10_mnist_fashionmnist")
             self.train_cifar10_mnist_fashionmnist(train_data, args)
         elif args.dataset == "shakespeare":
@@ -88,10 +94,104 @@ class MyModelTrainer(ModelTrainer):
                                                                 sum(epoch_loss) / len(epoch_loss)))
             self.loss = sum(epoch_loss) / len(epoch_loss)
 
+
+    def train_shakespeare(self,train_data,args):
+
+        # train config
+        reg=True
+        rou=None
+
+        old_model = copy.deepcopy(self.classifier)
+        old_model.to(self.device)
+        old_model.eval()
+
+        self.classifier.to(self.device)
+        self.classifier.train()
+        criterion = nn.CrossEntropyLoss().to(self.device)
+
+
+        optimizer = optim.SGD(self.classifier.parameters(), lr=args.lr, momentum=args.momentum)
+
+
+        batch_size, state_h, state_c = None, None, None
+
+        train_loss, train_l2_loss = 0, 0
+        correct = 0
+
+        for epoch in range(args.epochs):
+            for (batch_idx, (image, label)) in enumerate(train_data):
+
+                image, label = image.to(self.device), label.to(self.device).type(torch.long)
+                optimizer.zero_grad()
+
+                if batch_size is None:
+                    batch_size = image.shape[0]
+                    state_h, state_c = self.classifier.zero_state(batch_size)
+                    state_h = state_h.to(self.device)
+                    state_c = state_c.to(self.device)
+
+                if image.shape[0] < batch_size:  # Less than one batch
+                    break
+
+                output, (state_h, state_c) = self.classifier(image, (state_h, state_c))
+
+                state_h = state_h.detach()
+                state_c = state_c.detach()
+
+                loss = criterion(output, label)
+
+                # Add regularization
+                if reg is not None and rou is not None:
+                    l2_loss = 0.0
+                    for paramA, paramB in zip(self.classifier.parameters(),
+                                              old_model.parameters()):
+                        l2_loss += rou / 2 * \
+                                   torch.sum(torch.square(paramA - paramB.detach()))
+                    loss += l2_loss
+                    train_l2_loss += l2_loss.item()
+
+                train_loss += loss.item()
+
+                loss.backward()
+                optimizer.step()
+
+                #logging.info('Epoch: [{}/{}]\tLoss: {:.6f}'.format(epoch, args.epochs, loss.item()))
+
+
+                _, predicted = output.max(1)
+                # print(predicted)
+                correct += predicted.eq(label).sum().item()
+
+        correct /= args.epochs
+        total = len(train_data)  # Total # of train samples
+        train_loss = train_loss / ((batch_idx)*args.epochs)
+        accuracy = correct / total
+
+        print('Train accuracy: '+ str(accuracy))
+
+        if reg is not None and rou is not None:
+            train_l2_loss = train_l2_loss / ((batch_idx)*args.epochs)
+            logging.info(
+                'loss: {} l2_loss: {}'.format(train_loss, train_l2_loss))
+        else:
+            logging.info(
+                'loss: {}'.format(train_loss))
+
+        self.loss = train_loss
+
+
+
+
+
+
+
+
+
+
     
     # test
     def test(self, test_data, args, batch_selection):
-        if args.dataset == "cifar10" or "mnist" or "fashionmnist":
+        if args.dataset == "cifar10" or args.dataset == "mnist" or args.dataset == "fashionmnist":
             print("Test func: test_cifar10_mnist_fashionmnist")
             return(self.test_cifar10_mnist_fashionmnist(test_data, args, batch_selection))
         elif args.dataset == "shakespeare":
@@ -124,10 +224,57 @@ class MyModelTrainer(ModelTrainer):
 
             correct += y_hat.eq(y).sum().item()
 
-        test_loss /= len(test_data)
+        test_loss /= len(batch_selection)
         acc = correct / total
 
         return test_loss, acc
+
+
+
+    def test_shakespeare(self,test_data,args,batch_selection):
+        self.classifier.to(self.device)
+        self.classifier.eval()
+        criterion = nn.CrossEntropyLoss().to(self.device)
+
+        test_loss = 0
+        correct = 0
+        total = args.batch_size * len(batch_selection)
+
+        batch_size, state_h, state_c = None, None, None
+
+        with torch.no_grad():
+            for batch_idx, (image, label) in enumerate(test_data):
+                if batch_idx not in batch_selection:
+                    continue
+
+                image, label = image.to(self.device), label.to(self.device).type(torch.long)
+
+                if batch_size is None:
+                    batch_size = image.shape[0]
+                    state_h, state_c = self.classifier.zero_state(batch_size)
+                    state_h = state_h.to(self.device)
+                    state_c = state_c.to(self.device)
+
+                if image.shape[0] < batch_size:  # Less than one batch
+                    break
+
+                output, (state_h, state_c) = self.classifier(image, (state_h, state_c))
+
+                state_h = state_h.detach()
+                state_c = state_c.detach()
+
+                # sum up batch loss
+                test_loss += criterion(output, label).item()
+                # get the index of the max log-probability
+                _, predicted = output.max(1)
+                correct += predicted.eq(label).sum().item()
+
+        test_loss = test_loss / len(batch_selection)
+        accuracy = correct / total
+
+        return test_loss, accuracy
+
+
 
 
     # not used
