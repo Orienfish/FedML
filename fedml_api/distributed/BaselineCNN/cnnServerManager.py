@@ -45,7 +45,9 @@ class BaselineCNNServerManager(ServerManager):
         self.args = args
         self.aggregator = aggregator
         self.worker_num = args.client_num_in_total
+        self.select_num = args.client_num_per_round
         self.round_num = args.comm_round
+        self.round_delay_limit = args.round_delay_limit
         self.round_idx = 0
         self.is_preprocessed = is_preprocessed
         self.batch_selection = batch_selection
@@ -58,7 +60,8 @@ class BaselineCNNServerManager(ServerManager):
         self.acc_log = os.path.join(args.result_dir, 'acc.txt')
         self.tb_logger = logger
 
-        self.finish = [False for _ in range(self.worker_num)]
+        # Indicator of which client has uploaded in sync aggregation
+        self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
 
     def run(self):
         super().run()
@@ -78,6 +81,11 @@ class BaselineCNNServerManager(ServerManager):
         if self.args.method == 'fedavg':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
                                                   self.handle_message_receive_model_from_client_sync)
+
+            # Create a thread to trigger sync aggregation
+            self.sync_agg = threading.Thread(target=self.sync_aggregate_trigger)
+            self.sync_agg.start()
+
         elif self.args.method == 'fedasync':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
                                                   self.handle_message_receive_model_from_client_async)
@@ -97,39 +105,60 @@ class BaselineCNNServerManager(ServerManager):
         # download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
         self.aggregator.add_local_trained_result(sender_id - 1, cnn_params, local_sample_number)
-        b_all_received = self.aggregator.check_whether_all_receive()
-        # logging.info("b_all_received = " + str(b_all_received))
 
-        if b_all_received:
-            global_model_params = self.aggregator.aggregate()
-            test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
-                                                                      self.batch_selection)
-            cur_time = time.time() - self.start_time
-            logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
-                                                                cur_time,
-                                                                accuracy))
-            logging.info('#########################################\n')
+        # Update flag record
+        self.flag_client_model_uploaded[sender_id - 1] = True
 
-            # Tensoboard logger
-            self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
-            self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
+    def sync_aggregate_trigger(self):
+        # A threaded process that periodically checks whether the sync aggregation
+        # can be triggered
+        while True:
+            time.sleep(10)
+            received_num = sum(self.flag_client_model_uploaded)
+            lastest_round_start_time = max(self.round_start_time)
 
-            # Delay and accuracy logger
-            self.log(cur_time, test_loss, accuracy)
+            if received_num >= self.select_num or \
+                    (received_num > 0 and time.time() - lastest_round_start_time >= self.round_delay_limit):
+                self.sync_aggregate()
 
-            # start the next round
-            self.round_idx += 1
-            if self.round_idx == self.round_num:
-                for receiver_id in range(1, self.size):
-                    self.send_message_finish_to_client(receiver_id)
-                global running
-                running = False
-            else:
-                client_indexes = [self.round_idx] * self.args.client_num_per_round
 
-                for receiver_id in range(1, self.size):
-                    self.send_message_sync_model_to_client(receiver_id,
-                                                           client_indexes[receiver_id - 1])
+    def sync_aggregate(self):
+        # Sync aggregation
+        global_model_params = self.aggregator.aggregate(self.flag_client_model_uploaded)
+
+        # Reset
+        for idx in range(self.worker_num):
+            self.flag_client_model_uploaded[idx] = False
+
+        # Test
+        test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
+                                                                  self.batch_selection)
+        cur_time = time.time() - self.start_time
+        logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
+                                                            cur_time,
+                                                            accuracy))
+        logging.info('#########################################\n')
+
+        # Tensoboard logger
+        self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
+        self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
+
+        # Delay and accuracy logger
+        self.log(cur_time, test_loss, accuracy)
+
+        # start the next round
+        self.round_idx += 1
+        if self.round_idx == self.round_num:
+            for receiver_id in range(1, self.size):
+                self.send_message_finish_to_client(receiver_id)
+            global running
+            running = False
+        else:
+            client_indexes = [self.round_idx] * self.args.client_num_per_round
+
+            for receiver_id in range(1, self.size):
+                self.send_message_sync_model_to_client(receiver_id,
+                                                       client_indexes[receiver_id - 1])
 
     def handle_message_receive_model_from_client_async(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
