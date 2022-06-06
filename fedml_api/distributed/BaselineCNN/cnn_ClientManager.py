@@ -16,10 +16,72 @@ from .message_define import MyMessage
 from .utils import transform_list_to_tensor
 from .utils import transform_tensor_to_list
 
+from FedML.fedml_core.distributed.communication.message import Message
+from FedML.fedml_core.distributed.communication.mpi.com_manager import MpiCommunicationManager
+from FedML.fedml_core.distributed.communication.mqtt.mqtt_comm_manager import MqttCommManager
+
+# This is a simple extension to the basic MqttCommManager
+# The reason to use this new MqttCommManager is that, when the client disconnects
+# for some reason, then after it attempts to connect again, the client will automatically
+# send another init register to server
+class myMqttCommManager(MqttCommManager):
+    def __init__(self, host, port, client_mgr, topic='fedml', client_id=0,
+                 client_num=0):
+        self.client_mgr = client_mgr
+        super().__init__(host, port, topic=topic,
+                         client_id=client_id, client_num=client_num)
+
+    def _on_connect(self, client, userdata, flags, rc):
+        """
+            [server]
+            sending message topic (publish): serverID_clientID
+            receiving message topic (subscribe): clientID
+
+            [client]
+            sending message topic (publish): clientID
+            receiving message topic (subscribe): serverID_clientID
+
+        """
+        logging.info("_on_connect: Connection returned with result code: {}".format(str(rc)))
+        # subscribe one topic
+        if self.client_id == 0:
+            # server
+            for client_ID in range(1, self.client_num + 1):
+                result, mid = self._client.subscribe(self._topic + str(client_ID), 0)
+                self._unacked_sub.append(mid)
+                # print(result)
+        else:
+            # client
+            result, mid = self._client.subscribe(self._topic + str(0) + "_" + str(self.client_id), 0)
+            self._unacked_sub.append(mid)
+            # print(result)
+
+            # This is the major difference for the client
+            self.client_mgr.send_register_to_server()
+
 
 class BaseCNNClientManager(ClientManager):
     def __init__(self, mqtt_port, mqtt_host, args, trainer, comm=None, rank=0, size=0, backend="MQTT"):
-        super().__init__(args, comm, rank, size, backend, mqtt_host, mqtt_port)
+        self.args = args
+        self.size = size
+        self.rank = rank
+
+        self.backend = backend
+        if backend == "MPI":
+            self.com_manager = MpiCommunicationManager(comm, rank, size,
+                                                       node_type="server")
+        elif backend == "MQTT":
+            HOST = mqtt_host
+            # HOST = "broker.emqx.io"
+            PORT = mqtt_port
+            self.com_manager = myMqttCommManager(HOST, PORT, self, client_id=rank,
+                                                 client_num=size - 1)
+        else:
+            self.com_manager = MpiCommunicationManager(comm, rank, size,
+                                                       node_type="client")
+        self.com_manager.add_observer(self)
+        self.message_handler_dict = dict()
+
         self.trainer = trainer
         self.num_rounds = args.comm_round
         self.round_idx = 0
