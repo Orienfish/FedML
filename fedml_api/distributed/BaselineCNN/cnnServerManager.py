@@ -148,7 +148,7 @@ class BaselineCNNServerManager(ServerManager):
 
         # start the next round
         self.round_idx += 1
-        if self.round_idx == self.round_num:
+        if self.round_idx == self.round_num or accuracy >= self.args.target_accuracy:
             for receiver_id in range(1, self.size):
                 self.send_message_finish_to_client(receiver_id)
             global running
@@ -193,7 +193,7 @@ class BaselineCNNServerManager(ServerManager):
         # Delay and accuracy logger
         self.log(cur_time, test_loss, accuracy)
 
-        if self.round_idx >= self.round_num:
+        if self.round_idx >= self.round_num or accuracy >= self.args.target_accuracy:
             for receiver_id in range(1, self.size):
                 self.send_message_finish_to_client(receiver_id)
             global running
