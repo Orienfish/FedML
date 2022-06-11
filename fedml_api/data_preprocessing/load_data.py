@@ -121,6 +121,31 @@ class BiasLoader(Loader):
         return partition
 
 
+class NonIIDLoader(Loader):
+    """Load and pass 'shard' data partitions."""
+
+    def get_partition(self, partition_size, cls_num):
+        # Get a non-uniform partition with a random number of classes for this client
+
+        # Extract number of classes configuration
+        cls_list = np.random.choice(np.arange(len(self.labels)), cls_num,
+                                              replace=False)
+
+        dist = [0] * len(self.labels)
+        avg = partition_size / cls_num
+        for i, c in enumerate(cls_list):
+            dist[c] = int((i + 1) * avg) - int(i * avg)
+
+        partition = []  # Extract data according to distribution
+        for i, label in enumerate(self.labels):
+            partition.extend(self.extract(label, dist[i]))
+
+        # Shuffle data partition
+        random.shuffle(partition)
+
+        return partition
+
+
 def record_net_data_stats(y_train, net_dataidx_map):
     net_cls_counts = {}
 
@@ -133,7 +158,9 @@ def record_net_data_stats(y_train, net_dataidx_map):
 
 
 def partition_data(dataset, datadir, partition_method, partition_label,
-                   partition_alpha, partition_secondary, n_clients, data_size_per_client):
+                   partition_alpha, partition_secondary,
+                   partition_min_cls, partition_max_cls,
+                   n_clients, data_size_per_client):
     """
     Partition data to IID or non-IID distribution on each client
     Assign a static dataset to each client
@@ -142,9 +169,13 @@ def partition_data(dataset, datadir, partition_method, partition_label,
         datadir: str, path to the directory of downloaded dataset
         partition_method: str, iid or non-iid
         partition_label: str, how to partition label among clients in non-iid, uniform or normal
-        partition_alpha: float between 0 and 1, the ratio of majority of classes on one client in non-iid
-        partition_secondary: True of False, whether to sample the minority sample from one class
+        partition_alpha: float between 0 and 1, used in bias loader
+            the ratio of majority of classes on one client in non-iid
+        partition_secondary: True of False, used in bias loader
+            whether to sample the minority sample from one class
             or uniformly from the rest classes in non-iid
+        partition_min_cls: used in noniid loader, the min number of classes on one client
+        partition_max_cls: used in noniid loader, the max number of classes on one client
         n_clients: int, the total number of clients
         data_size_per_client: int, the total number of samples on each client
     Return:
@@ -172,7 +203,7 @@ def partition_data(dataset, datadir, partition_method, partition_label,
             data_idx = loader.get_partition(data_size_per_client)
             net_dataidx_map[j] = data_idx
 
-    elif partition_method == "noniid": # non-IID data distribution
+    elif partition_method == "bias":  # bias data distribution
         loader = BiasLoader(X_train, y_train, X_test, y_test)
         labels = list(np.sort(np.unique(y_test)))
         net_dataidx_map = {}
@@ -185,11 +216,23 @@ def partition_data(dataset, datadir, partition_method, partition_label,
         random.shuffle(dist)  # Shuffle distribution
         logging.info('Label distribution:  %s' % str(dist))
 
-        # Distribute non-IID data to each client and store in net_dataidx_map
+        # Distribute bias data to each client and store in net_dataidx_map
         for j in range(n_clients):
             major_label = random.choices(labels, dist)[0]
             data_idx = loader.get_partition(data_size_per_client, major_label,
                                             partition_alpha, partition_secondary)
+            net_dataidx_map[j] = data_idx
+
+    elif partition_method == 'noniid':  # noniid data distribution
+        loader = NonIIDLoader(X_train, y_train, X_test, y_test)
+        partition_cls = np.random.randint(partition_min_cls,
+                                          partition_max_cls,
+                                          n_clients)
+
+        net_dataidx_map = {}
+        for j in range(n_clients):
+            data_idx = loader.get_partition(data_size_per_client,
+                                            partition_cls[j])
             net_dataidx_map[j] = data_idx
 
     traindata_cls_counts = record_net_data_stats(y_train, net_dataidx_map)
@@ -222,13 +265,15 @@ def get_dataloader_test(dataset, datadir, train_bs, test_bs, dataidxs_train, dat
 
 
 def load_partition_data(dataset, data_dir, partition_method, partition_label,
-                        partition_alpha, partition_secondary, client_number,
-                        batch_size, data_size_per_client):
+                        partition_alpha, partition_secondary,
+                        partition_min_cls, partition_max_cls,
+                        client_number, batch_size, data_size_per_client):
     # Partition the data
     X_train, y_train, X_test, y_test, net_dataidx_map, traindata_cls_counts = \
         partition_data(dataset, data_dir, partition_method, partition_label,
-                       partition_alpha, partition_secondary, client_number,
-                       data_size_per_client)
+                       partition_alpha, partition_secondary,
+                       partition_min_cls, partition_max_cls,
+                       client_number, data_size_per_client)
 
     class_num = len(np.unique(y_train))
     logging.info("traindata_cls_counts = " + str(traindata_cls_counts))
