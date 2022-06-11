@@ -8,6 +8,7 @@ import signal
 import threading
 
 from .message_define import MyMessage
+from .clientSelection import ClientSelection
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../../FedML")))
@@ -52,16 +53,27 @@ class BaselineCNNServerManager(ServerManager):
         self.is_preprocessed = is_preprocessed
         self.batch_selection = batch_selection
 
+        # For client selection
+        self.cs = ClientSelection(self.worker_num, args.selection, self.round_num, args.cs_gamma)
+
         # For results records
         self.start_time = time.time()
         self.round_start_time = [0.0 for _ in range(self.worker_num)]
         self.round_delay = [0.0 for _ in range(self.worker_num)]
-        self.delay_log = os.path.join(args.result_dir, 'delay.txt')
+        self.comp_delay = [0.0 for _ in range(self.worker_num)]
+        self.round_delay_log = os.path.join(args.result_dir, 'round_delay.txt')
+        self.comp_delay_log = os.path.join(args.result_dir, 'comp_delay.txt')
         self.acc_log = os.path.join(args.result_dir, 'acc.txt')
         self.tb_logger = logger
 
         # Indicator of which client has uploaded in sync aggregation
+        # This can also be used as the availability of the clients
+        # If True, client has uploaded the model and finished last round, thus available
+        # If False, the local round has not returned, thus unavailable
         self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
+
+        # Start from warmup
+        self.warmup_done = False
 
     def run(self):
         super().run()
@@ -77,6 +89,8 @@ class BaselineCNNServerManager(ServerManager):
     def register_message_receive_handlers(self):
         self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_INIT_REGISTER,
                                               self.handle_init_register_from_client)
+        self.warmup_thread = threading.Thread(target=self.warmup_checker)
+        self.warmup_thread.start()
 
         if self.args.method == 'fedavg':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
@@ -95,19 +109,31 @@ class BaselineCNNServerManager(ServerManager):
         logging.info("handle_message_receive_model_from_client_sync "
                      "sender_id = {}".format(sender_id))
 
+        # Update flag record
+        self.flag_client_model_uploaded[sender_id - 1] = True
+
         # Record the round delay
-        self.round_delay[sender_id - 1] = time.time() - self.round_start_time[sender_id - 1]
+        round_delay = time.time() - self.round_start_time[sender_id - 1]
+        self.round_delay[sender_id - 1] = round_delay
 
         # Receive the information from clients
         cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         cnn_params = transform_list_to_tensor(cnn_params)
+        cnn_grads = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_GRADS)
         local_sample_number = msg_params.get(MyMessage.MSG_ARG_KEY_NUM_SAMPLES)
+        local_loss = msg_params.get(MyMessage.MSG_ARG_KEY_LOSS)
+        local_comp_delay = msg_params.get(MyMessage.MSG_ARG_KEY_COMP_DELAY)
         # download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
+
+        # Record the comp delay
+        self.comp_delay[sender_id - 1] = local_comp_delay
+
+        # Update information for client selection
+        self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - 1)
+        self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
 
         self.aggregator.add_local_trained_result(sender_id - 1, cnn_params, local_sample_number)
 
-        # Update flag record
-        self.flag_client_model_uploaded[sender_id - 1] = True
 
     def sync_aggregate_trigger(self):
         # A threaded process that periodically checks whether the sync aggregation
@@ -117,10 +143,30 @@ class BaselineCNNServerManager(ServerManager):
             received_num = sum(self.flag_client_model_uploaded)
             lastest_round_start_time = max(self.round_start_time)
 
-            if received_num >= self.select_num or \
-                    (received_num > 0 and time.time() - lastest_round_start_time >= self.round_delay_limit):
+            if self.warmup_done and (received_num >= self.select_num or
+                                     (received_num > 0 and
+                                      time.time() - lastest_round_start_time >= self.round_delay_limit)):
                 self.sync_aggregate()
 
+    def warmup_checker(self):
+        # A threaded process that periodically checks whether the warmup is done
+        while True:
+            time.sleep(10)
+            received_num = sum(self.flag_client_model_uploaded)
+
+            if received_num >= self.worker_num:  # all received
+                # Start the first round from client selection
+                select_ids = self.cs.select(self.select_num, self.flag_client_model_uploaded)
+                for idx in select_ids:
+                    self.send_message_sync_model_to_client(idx + 1,
+                                                           self.round_idx)
+                    self.flag_client_model_uploaded[idx] = False
+
+                break  # End the thread
+
+        self.warmup_done = True
+        logging.info('All received. Warmup done.')
+        logging.info('Start the experiment!')
 
     def sync_aggregate(self):
         # Sync aggregation
@@ -154,53 +200,73 @@ class BaselineCNNServerManager(ServerManager):
             global running
             running = False
         else:
-            client_indexes = [self.round_idx] * self.args.client_num_per_round
-
-            for receiver_id in range(1, self.size):
-                self.send_message_sync_model_to_client(receiver_id,
-                                                       client_indexes[receiver_id - 1])
+            # Client selection
+            select_ids = self.cs.select(self.select_num, self.flag_client_model_uploaded)
+            for idx in select_ids:
+                self.send_message_sync_model_to_client(idx + 1,
+                                                       self.round_idx)
+                self.flag_client_model_uploaded[idx] = False
 
     def handle_message_receive_model_from_client_async(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
         logging.info("handle_message_receive_model_from_client_async "
                      "sender_id = {}".format(sender_id))
 
+        # Update flag record
+        self.flag_client_model_uploaded[sender_id - 1] = True
+
         # Record the round delay
-        self.round_delay[sender_id - 1] = time.time() - self.round_start_time[sender_id - 1]
+        round_delay = time.time() - self.round_start_time[sender_id - 1]
+        self.round_delay[sender_id - 1] = round_delay
 
         # Receive the information from clients
         cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         cnn_params = transform_list_to_tensor(cnn_params)
+        cnn_grads = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_GRADS)
         local_sample_number = msg_params.get(MyMessage.MSG_ARG_KEY_NUM_SAMPLES)
+        local_loss = msg_params.get(MyMessage.MSG_ARG_KEY_LOSS)
+        local_comp_delay = msg_params.get(MyMessage.MSG_ARG_KEY_COMP_DELAY)
         download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
-        self.round_idx += 1
-        staleness = self.round_idx - download_epoch
-        self.aggregator.aggregate_async(cnn_params, local_sample_number, staleness)
+        # Record the comp delay
+        self.comp_delay[sender_id - 1] = local_comp_delay
 
-        test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
-                                                                             self.batch_selection)
-        cur_time = time.time() - self.start_time
-        logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
-                                                            cur_time,
-                                                            accuracy))
-        logging.info('#########################################\n')
+        # Update information for client selection
+        self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - 1)
+        self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
 
-        # Tensoboard logger
-        self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
-        self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
+        if self.warmup_done:
+            self.round_idx += 1
+            staleness = self.round_idx - download_epoch
+            self.aggregator.aggregate_async(cnn_params, local_sample_number, staleness)
 
-        # Delay and accuracy logger
-        self.log(cur_time, test_loss, accuracy)
+            test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
+                                                                                 self.batch_selection)
+            cur_time = time.time() - self.start_time
+            logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
+                                                                cur_time,
+                                                                accuracy))
+            logging.info('#########################################\n')
 
-        if self.round_idx >= self.round_num or accuracy >= self.args.target_accuracy:
-            for receiver_id in range(1, self.size):
-                self.send_message_finish_to_client(receiver_id)
-            global running
-            running = False
-        else:
-            self.send_message_sync_model_to_client(sender_id,
-                                                   self.round_idx)
+            # Tensoboard logger
+            self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
+            self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
+
+            # Delay and accuracy logger
+            self.log(cur_time, test_loss, accuracy)
+
+            if self.round_idx >= self.round_num or accuracy >= self.args.target_accuracy:
+                for receiver_id in range(1, self.size):
+                    self.send_message_finish_to_client(receiver_id)
+                global running
+                running = False
+            else:
+                # Client selection
+                select_ids = self.cs.select(1, self.flag_client_model_uploaded)
+                for idx in select_ids:
+                    self.send_message_sync_model_to_client(idx + 1,
+                                                           self.round_idx)
+                    self.flag_client_model_uploaded[idx] = False
 
     def handle_init_register_from_client(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -246,11 +312,16 @@ class BaselineCNNServerManager(ServerManager):
         self.send_message(message)
 
     def log(self, cur_time, test_loss, accuracy):
-        # Log the round delays in the latest round
-        with open(self.delay_log, 'a+') as out:
+        # Log the round and comp delays in the latest round
+        with open(self.round_delay_log, 'a+') as out:
             np.savetxt(out, np.array(self.round_delay).reshape((1, -1)),
                        delimiter=',')
-        self.round_delay = [0.0 for _ in range(self.args.client_num_in_total)]
+        self.round_delay = [0.0 for _ in range(self.worker_num)]
+
+        with open(self.comp_delay_log, 'a+') as out:
+            np.savetxt(out, np.array(self.comp_delay).reshape((1, -1)),
+                       delimiter=',')
+        self.comp_delay = [0.0 for _ in range(self.worker_num)]
 
         # Log the test loss and accuracy
         with open(self.acc_log, 'a+') as out:
