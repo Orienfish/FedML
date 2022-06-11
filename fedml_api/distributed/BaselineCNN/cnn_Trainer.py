@@ -35,8 +35,9 @@ class BaseCNN_Trainer(object):
         self.trainer.train(self.train_local, self.args)
 
         cnn_params = self.trainer.get_model_params()
+        cnn_grads = self.trainer.get_model_grads()
 
-        return cnn_params, self.local_sample_number, self.trainer.loss
+        return cnn_params, cnn_grads, self.local_sample_number, self.trainer.loss
 
 
     '''

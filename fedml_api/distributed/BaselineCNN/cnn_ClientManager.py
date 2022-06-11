@@ -130,16 +130,17 @@ class BaseCNNClientManager(ClientManager):
                           self.get_sender_id(), 0)
         self.send_message(message)
 
-    def send_model_to_server(self, receive_id, cnn_params, local_sample_num,
-                             loss, comp_delay):
+    def send_model_to_server(self, receive_id, cnn_params, cnn_grads, local_sample_num,
+                             local_loss, local_comp_delay):
         
         cnn_params = transform_tensor_to_list(cnn_params)
 
         message = Message(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER, self.get_sender_id(), receive_id)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, cnn_params)
+        message.add_params(MyMessage.MSG_ARG_KEY_MODEL_GRADS, cnn_grads)
         message.add_params(MyMessage.MSG_ARG_KEY_NUM_SAMPLES, local_sample_num)
-        message.add_params(MyMessage.MSG_ARG_KEY_LOSS, loss)
-        message.add_params(MyMessage.MSG_ARG_KEY_COMP_DELAY, comp_delay)
+        message.add_params(MyMessage.MSG_ARG_KEY_LOSS, local_loss)
+        message.add_params(MyMessage.MSG_ARG_KEY_COMP_DELAY, local_comp_delay)
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.download_epoch)
         self.send_message(message)
 
@@ -147,6 +148,7 @@ class BaseCNNClientManager(ClientManager):
     def __train(self):
         logging.info("#######training########### round_id = %d" % self.round_idx)
         start = time.time()
-        cnn_params, local_sample_num, loss = self.trainer.train()
-        comp_delay = time.time() - start
-        self.send_model_to_server(0, cnn_params, local_sample_num, loss, comp_delay)
+        cnn_params, cnn_grads, local_sample_num, local_loss = self.trainer.train()
+        local_comp_delay = time.time() - start
+        self.send_model_to_server(0, cnn_params, cnn_grads, local_sample_num,
+                                  local_loss, local_comp_delay)

@@ -28,6 +28,15 @@ class MyModelTrainer(ModelTrainer):
     def set_model_params(self, model_parameters):
         self.classifier.load_state_dict(model_parameters)
 
+    # get cnn gradients
+    def get_model_grads(self):
+        grads = []
+        for name, weight in self.classifier.cpu().named_parameters():  # pylint: disable=no-member
+            if weight.requires_grad:
+                grads.append((name, weight.grad))
+
+        return grads
+
     # train
     def train(self, train_data, args):
         old_model = copy.deepcopy(self.classifier)
