@@ -24,7 +24,7 @@ class MyModelTrainer(ModelTrainer):
     def get_model_params(self):
         return self.classifier.cpu().state_dict()
 
-    # set snn parameter
+    # set cnn parameter
     def set_model_params(self, model_parameters):
         self.classifier.load_state_dict(model_parameters)
 

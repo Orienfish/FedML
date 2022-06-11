@@ -20,6 +20,8 @@ class MyMessage(object):
         message payload keywords definition
     """
     MSG_ARG_KEY_NUM_SAMPLES = "num_samples"
+    MSG_ARG_KEY_LOSS = "loss"
+    MSG_ARG_KEY_COMP_DELAY = "comp_delay"
     MSG_ARG_KEY_MODEL_PARAMS = "model_params"
     MSG_ARG_KEY_CLIENT_INDEX = "client_idx"
     MSG_ARG_KEY_DOWNLOAD_EPOCH = "download_epoch"
