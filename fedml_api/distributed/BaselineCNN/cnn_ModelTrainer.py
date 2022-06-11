@@ -24,9 +24,19 @@ class MyModelTrainer(ModelTrainer):
     def get_model_params(self):
         return self.classifier.cpu().state_dict()
 
-    # set cnn parameter
+    # set cnn parameters
     def set_model_params(self, model_parameters):
         self.classifier.load_state_dict(model_parameters)
+
+    # get delta cnn parameters
+    def get_delta_params(self, old_model_params):
+        new_model_params = self.get_model_params()
+
+        delta_params = copy.deepcopy(new_model_params)
+        for k in delta_params.keys():
+            delta_params[k] = new_model_params[k] - old_model_params[k]
+
+        return delta_params
 
     # get cnn gradients
     def get_model_grads(self):
