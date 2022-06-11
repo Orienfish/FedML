@@ -37,7 +37,7 @@ class BaseCNN_Trainer(object):
 
         cnn_params = self.trainer.get_model_params()
         #cnn_grads = self.trainer.get_model_grads()
-        cnn_grads = self.trainer.get_delta_weights(old_cnn_params)
+        cnn_grads = self.trainer.get_delta_params(old_cnn_params)
 
         return cnn_params, cnn_grads, self.local_sample_number, self.trainer.loss
 

@@ -23,7 +23,7 @@ class MyModelTrainer(ModelTrainer):
 
     # get cnn parameters
     def get_model_params(self):
-        return self.classifier.cpu().state_dict()
+        return copy.deepcopy(self.classifier.cpu().state_dict())
 
     # set cnn parameters
     def set_model_params(self, model_parameters):
@@ -37,7 +37,16 @@ class MyModelTrainer(ModelTrainer):
         for k in delta_params.keys():
             delta_params[k] = new_model_params[k] - old_model_params[k]
 
-        return self.flatten_grads(delta_params)
+        print(self.flatten_weights((delta_params))[:10])
+        return self.flatten_weights(delta_params)
+
+    def flatten_weights(self, weights):
+        # Flatten weights of dictionary into vectors
+        weight_vecs = []
+        for k in weights.keys():
+            weight_vecs.extend(weights[k].flatten().tolist())
+
+        return weight_vecs  # a list
 
     # get cnn gradients
     def get_model_grads(self):
@@ -46,16 +55,16 @@ class MyModelTrainer(ModelTrainer):
             if weight.requires_grad:
                 grads.append((name, weight.grad))
 
-        return grads
+        return self.flatten_grads(grads)
 
     # flatten gradients
     def flatten_grads(self, grads):
-        # Flatten weights into vectors
-        vecs = []
+        # Flatten grads of (name, grad) tuples into vectors
+        grad_vecs = []
         for _, grad in grads:
-            vecs.extend(grad.flatten().tolist())
+            grad_vecs.extend(grad.flatten().tolist())
 
-        return np.array(vecs)
+        return grad_vecs  # a list
 
     # train
     def train(self, train_data, args):
