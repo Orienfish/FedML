@@ -78,7 +78,7 @@ class ClientSelection(object):
 
     def tier_profiling(self):
         # Sort clients by delay, fastest first
-        sorted_clients_ids = sorted(np.arange(self.n_clients),
+        sorted_clients_ids = sorted(np.arange(self.n_clients, dtype=np.int32),
                                 key=lambda i: self.est_delay[i])
 
         # Determine number of tiers
@@ -160,7 +160,7 @@ class ClientSelection(object):
         selected = np.array([False for _ in range(self.n_clients)])
 
         if self.select_type == 'divfl':
-            sample_client_ids = []
+            sample_clients_ids = []
             while np.sum(selected) < select_num:
                 # selected/not_selected: used in divFL, a numpy array of [True or False]
                 # indicating whether each client is already selected
@@ -191,10 +191,10 @@ class ClientSelection(object):
 
                 # Update client availability status
                 selected[select_client_id] = True
-                sample_client_ids.append(select_client_id)
+                sample_clients_ids.append(select_client_id)
 
         else:  # first sort all candidates according to certain rules
-            available_ids = np.arange(self.n_clients)[available]
+            available_ids = np.arange(self.n_clients, dtype=np.int32)[available]
 
             if self.select_type == 'random':
                 # Select clients
@@ -271,5 +271,6 @@ class ClientSelection(object):
             # Pick the first k clients
             sample_clients_ids = candidates_ids[:select_num]
 
-        # print(sample_clients)
+        sample_clients_ids = np.array(sample_clients_ids, dtype=np.int32)
+        logging.info('selected client ids: {}'.format(sample_clients_ids))
         return sample_clients_ids

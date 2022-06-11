@@ -157,6 +157,7 @@ class BaselineCNNServerManager(ServerManager):
             if received_num >= self.worker_num:  # all received
                 # Start the first round from client selection
                 select_ids = self.cs.select(self.select_num, self.flag_client_model_uploaded)
+                logging.info(select_ids.dtype)
                 for idx in select_ids:
                     self.send_message_sync_model_to_client(idx + 1,
                                                            self.round_idx)
@@ -290,6 +291,7 @@ class BaselineCNNServerManager(ServerManager):
         self.send_message(message)
 
     def send_message_sync_model_to_client(self, receive_id, client_index):
+        receive_id = int(receive_id)
         logging.info("send_message_sync_model_to_client. " 
                      "receive_id = {} client_idx = {}".format(receive_id, client_index))
         self.round_start_time[receive_id-1] = time.time()
