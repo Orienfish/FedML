@@ -4,6 +4,7 @@ import torch
 from torch import nn
 import torch.optim as optim
 import copy
+import numpy as np
 
 try:
     from fedml_core.trainer.model_trainer import ModelTrainer
@@ -36,7 +37,7 @@ class MyModelTrainer(ModelTrainer):
         for k in delta_params.keys():
             delta_params[k] = new_model_params[k] - old_model_params[k]
 
-        return delta_params
+        return self.flatten_grads(delta_params)
 
     # get cnn gradients
     def get_model_grads(self):
@@ -46,6 +47,15 @@ class MyModelTrainer(ModelTrainer):
                 grads.append((name, weight.grad))
 
         return grads
+
+    # flatten gradients
+    def flatten_grads(self, grads):
+        # Flatten weights into vectors
+        vecs = []
+        for _, grad in grads:
+            vecs.extend(grad.flatten().tolist())
+
+        return np.array(vecs)
 
     # train
     def train(self, train_data, args):
