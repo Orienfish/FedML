@@ -152,6 +152,7 @@ class BaselineCNNServerManager(ServerManager):
             if self.warmup_done and (received_num >= self.select_num or
                                      (received_num > 0 and
                                       time.time() - lastest_round_start_time >= self.round_delay_limit)):
+                # All received or exceed time limit
                 logging.info('Sync Aggregation!')
                 self.sync_aggregate()
 
@@ -163,8 +164,12 @@ class BaselineCNNServerManager(ServerManager):
         while True:
             time.sleep(10)
             received_num = sum(self.flag_client_model_uploaded)
+            lastest_round_start_time = max(self.round_start_time)
 
-            if received_num >= self.worker_num:  # all received
+            if received_num >= self.worker_num or \
+                    (received_num > 0 and
+                     time.time() - lastest_round_start_time >= self.round_delay_limit):
+                # All received or exceed time limit
                 # Start the first round from client selection
                 select_ids = self.cs.select(self.select_num, self.flag_available)
                 if select_ids.size > 0:
