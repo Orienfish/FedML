@@ -74,7 +74,7 @@ class ClientSelection(object):
 
         # print(client_id, grads[:10])
         # print(self.grads[:, :10])
-        logging.info(self.dissimil_mat)
+        # logging.info(self.dissimil_mat)
 
     def tier_profiling(self):
         # Sort clients by delay, fastest first
@@ -155,8 +155,8 @@ class ClientSelection(object):
             print("Tier " + str(tier) + " : " + str(self.tiers[tier].p))
             i = i + 1
 
-    def select(self, select_num, flag_client_model_uploaded):
-        available = np.array(flag_client_model_uploaded)
+    def select(self, select_num, flag_available):
+        available = np.array(flag_available)
         available_ids = np.arange(self.n_clients, dtype=np.int32)[available]
         selected = np.array([False for _ in range(self.n_clients)])
 

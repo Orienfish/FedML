@@ -66,10 +66,12 @@ class BaselineCNNServerManager(ServerManager):
         self.acc_log = os.path.join(args.result_dir, 'acc.txt')
         self.tb_logger = logger
 
+        self.flag_available = [False for _ in range(self.worker_num)]
         # Indicator of which client has uploaded in sync aggregation
-        # This can also be used as the availability of the clients
+        # This is related but different from the availability of the clients
         # If True, client has uploaded the model and finished last round, thus available
         # If False, the local round has not returned, thus unavailable
+        # Formally, flag_available >= flag_client_model_uploaded
         self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
 
         # Start from warmup
@@ -111,6 +113,7 @@ class BaselineCNNServerManager(ServerManager):
 
         # Update flag record
         self.flag_client_model_uploaded[sender_id - 1] = True
+        self.flag_available = True
 
         # Record the round delay
         round_delay = time.time() - self.round_start_time[sender_id - 1]
@@ -149,7 +152,11 @@ class BaselineCNNServerManager(ServerManager):
             if self.warmup_done and (received_num >= self.select_num or
                                      (received_num > 0 and
                                       time.time() - lastest_round_start_time >= self.round_delay_limit)):
+                logging.info('Sync Aggregation!')
                 self.sync_aggregate()
+
+                # Reset uploaded flag
+                self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
 
     def warmup_checker(self):
         # A threaded process that periodically checks whether the warmup is done
@@ -159,14 +166,16 @@ class BaselineCNNServerManager(ServerManager):
 
             if received_num >= self.worker_num:  # all received
                 # Start the first round from client selection
-                select_ids = self.cs.select(self.select_num, self.flag_client_model_uploaded)
+                select_ids = self.cs.select(self.select_num, self.flag_available)
                 if select_ids.size > 0:
                     for idx in select_ids:
                         self.send_message_sync_model_to_client(idx + 1,
                                                                self.round_idx)
-                        self.flag_client_model_uploaded[idx] = False
 
                 break  # End the thread
+
+        # Reset uploaded flag
+        self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
 
         self.warmup_done = True
         logging.info('All received. Warmup done.')
@@ -201,12 +210,11 @@ class BaselineCNNServerManager(ServerManager):
             running = False
         else:
             # Client selection
-            select_ids = self.cs.select(self.select_num, self.flag_client_model_uploaded)
+            select_ids = self.cs.select(self.select_num, self.flag_available)
             if select_ids.size > 0:
                 for idx in select_ids:
                     self.send_message_sync_model_to_client(idx + 1,
                                                            self.round_idx)
-                    self.flag_client_model_uploaded[idx] = False
 
     def handle_message_receive_model_from_client_async(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -215,6 +223,7 @@ class BaselineCNNServerManager(ServerManager):
 
         # Update flag record
         self.flag_client_model_uploaded[sender_id - 1] = True
+        self.flag_available = True
 
         # Record the round delay
         round_delay = time.time() - self.round_start_time[sender_id - 1]
@@ -243,6 +252,9 @@ class BaselineCNNServerManager(ServerManager):
             staleness = self.round_idx - download_epoch
             self.aggregator.aggregate_async(cnn_params, local_sample_number, staleness)
 
+            # Reset flag uploaded
+            self.flag_client_model_uploaded[sender_id - 1] = False
+
             test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
                                                                                  self.batch_selection)
             cur_time = time.time() - self.start_time
@@ -265,12 +277,11 @@ class BaselineCNNServerManager(ServerManager):
                 running = False
             else:
                 # Client selection
-                select_ids = self.cs.select(1, self.flag_client_model_uploaded)
+                select_ids = self.cs.select(1, self.flag_available)
                 if select_ids.size > 0:
                     for idx in select_ids:
                         self.send_message_sync_model_to_client(idx + 1,
                                                                self.round_idx)
-                        self.flag_client_model_uploaded[idx] = False
 
     def handle_init_register_from_client(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -298,6 +309,9 @@ class BaselineCNNServerManager(ServerManager):
         logging.info("send_message_sync_model_to_client. " 
                      "receive_id = {} client_idx = {}".format(receive_id, client_index))
         self.round_start_time[receive_id-1] = time.time()
+
+        # Set available to False to prevent client selection
+        self.flag_available[receive_id - 1] = False
         
         global_model_params = self.aggregator.get_global_model_params()
 
