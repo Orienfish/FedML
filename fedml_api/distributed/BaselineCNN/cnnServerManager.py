@@ -66,7 +66,7 @@ class BaselineCNNServerManager(ServerManager):
         self.acc_log = os.path.join(args.result_dir, 'acc.txt')
         self.tb_logger = logger
 
-        self.flag_available = [False for _ in range(self.worker_num)]
+        self.flag_available = [True for _ in range(self.worker_num)]
         # Indicator of which client has uploaded in sync aggregation
         # This is related but different from the availability of the clients
         # If True, client has uploaded the model and finished last round, thus available
@@ -98,10 +98,6 @@ class BaselineCNNServerManager(ServerManager):
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
                                                   self.handle_message_receive_model_from_client_sync)
 
-            # Create a thread to trigger sync aggregation
-            self.sync_agg = threading.Thread(target=self.sync_aggregate_trigger)
-            self.sync_agg.start()
-
         elif self.args.method == 'fedasync':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
                                                   self.handle_message_receive_model_from_client_async)
@@ -113,7 +109,7 @@ class BaselineCNNServerManager(ServerManager):
 
         # Update flag record
         self.flag_client_model_uploaded[sender_id - 1] = True
-        self.flag_available = True
+        self.flag_available[sender_id - 1] = True
 
         # Record the round delay
         round_delay = time.time() - self.round_start_time[sender_id - 1]
@@ -146,12 +142,18 @@ class BaselineCNNServerManager(ServerManager):
         # can be triggered
         while True:
             time.sleep(10)
-            received_num = sum(self.flag_client_model_uploaded)
-            lastest_round_start_time = max(self.round_start_time)
+            uploaded_num = sum(self.flag_client_model_uploaded)
+            not_returned = ~np.array(self.flag_available)
+            waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
+            if np.sum(not_returned) > 0:
+                logging.info(not_returned)
+                logging.info('sync waiting time: {}'.format(waiting_time_since_start))
+                min_waiting_time = np.min(waiting_time_since_start)
+            else:
+                min_waiting_time = 0.0
 
-            if self.warmup_done and (received_num >= self.select_num or
-                                     (received_num > 0 and
-                                      time.time() - lastest_round_start_time >= self.round_delay_limit)):
+            if uploaded_num >= self.worker_num or \
+                    (uploaded_num > 0 and min_waiting_time >= self.round_delay_limit):
                 # All received or exceed time limit
                 logging.info('Sync Aggregation!')
                 self.sync_aggregate()
@@ -163,12 +165,18 @@ class BaselineCNNServerManager(ServerManager):
         # A threaded process that periodically checks whether the warmup is done
         while True:
             time.sleep(10)
-            received_num = sum(self.flag_client_model_uploaded)
-            lastest_round_start_time = max(self.round_start_time)
+            uploaded_num = sum(self.flag_client_model_uploaded)
+            not_returned = ~np.array(self.flag_available)
+            waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
+            if np.sum(not_returned) > 0:
+                logging.info(not_returned)
+                logging.info('warmup waiting time: {}'.format(waiting_time_since_start))
+                min_waiting_time = np.min(waiting_time_since_start)
+            else:
+                min_waiting_time = 0.0
 
-            if received_num >= self.worker_num or \
-                    (received_num > 0 and
-                     time.time() - lastest_round_start_time >= self.round_delay_limit):
+            if uploaded_num >= self.worker_num or \
+                    (uploaded_num > 0 and min_waiting_time >= self.round_delay_limit):
                 # All received or exceed time limit
                 # Start the first round from client selection
                 select_ids = self.cs.select(self.select_num, self.flag_available)
@@ -185,6 +193,10 @@ class BaselineCNNServerManager(ServerManager):
         self.warmup_done = True
         logging.info('All received. Warmup done.')
         logging.info('Start the experiment!')
+
+        # Create a thread to trigger sync aggregation
+        self.sync_agg = threading.Thread(target=self.sync_aggregate_trigger)
+        self.sync_agg.start()
 
     def sync_aggregate(self):
         # Sync aggregation
@@ -228,7 +240,7 @@ class BaselineCNNServerManager(ServerManager):
 
         # Update flag record
         self.flag_client_model_uploaded[sender_id - 1] = True
-        self.flag_available = True
+        self.flag_available[sender_id - 1] = True
 
         # Record the round delay
         round_delay = time.time() - self.round_start_time[sender_id - 1]
@@ -301,6 +313,10 @@ class BaselineCNNServerManager(ServerManager):
         logging.info("send_message_init_to_client. "
                      "receive_id = {} client_idx = {}".format(receive_id, client_index))
         self.round_start_time[receive_id - 1] = time.time()
+
+        # Set available to False to prevent client selection
+        self.flag_available[receive_id - 1] = False
+
         global_model_params = transform_tensor_to_list(global_model_params)
 
         message = Message(MyMessage.MSG_TYPE_S2C_INIT_CONFIG, self.get_sender_id(), receive_id)
