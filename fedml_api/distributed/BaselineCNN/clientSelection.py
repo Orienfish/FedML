@@ -86,7 +86,7 @@ class ClientSelection(object):
         m = self.n_clients / est_clients_per_round
 
         if m < 5:
-            m = math.floor(m)
+            m = max(1, math.floor(m))
         elif m <= 10:
             m = 5
         else:
@@ -157,14 +157,19 @@ class ClientSelection(object):
 
     def select(self, select_num, flag_client_model_uploaded):
         available = np.array(flag_client_model_uploaded)
+        available_ids = np.arange(self.n_clients, dtype=np.int32)[available]
         selected = np.array([False for _ in range(self.n_clients)])
+
+        logging.info('Available clients: {}'.format(available))
 
         if self.select_type == 'divfl':
             sample_clients_ids = []
-            while np.sum(selected) < select_num:
-                # selected/not_selected: used in divFL, a numpy array of [True or False]
-                # indicating whether each client is already selected
-                not_selected = available & ~selected
+
+            # selected/not_selected: used in divFL, a numpy array of [True or False]
+            # indicating whether each client is already selected
+            not_selected = available & ~selected
+            while np.sum(selected) < select_num and np.sum(not_selected) > 0:
+                # Repeat until select the required number or there is no device to select
 
                 # cur_G: (not selected, 1), current error in approximating not selected clients
                 if np.sum(selected) > 1:  # More than one selected client right now
@@ -192,13 +197,12 @@ class ClientSelection(object):
                 # Update client availability status
                 selected[select_client_id] = True
                 sample_clients_ids.append(select_client_id)
+                not_selected = available & ~selected
 
         else:  # first sort all candidates according to certain rules
-            available_ids = np.arange(self.n_clients, dtype=np.int32)[available]
-
             if self.select_type == 'random':
                 # Select clients
-                candidates_ids = available_ids
+                candidates_ids = available_ids.tolist()
                 random.shuffle(candidates_ids)
 
             elif self.select_type == 'high_loss_first':
@@ -221,8 +225,8 @@ class ClientSelection(object):
 
                 # Sort the clients by jointly consider latency and loss
                 candidates_ids = sorted(available_ids,
-                                    key=lambda i: losses[i] - self.gamma * delays[i],
-                                    reverse=True)
+                                        key=lambda i: losses[i] - self.gamma * delays[i],
+                                        reverse=True)
                 print([losses[i] for i in candidates_ids])
                 print([self.gamma * delays[i] for i in candidates_ids])
 
@@ -241,10 +245,13 @@ class ClientSelection(object):
 
                     # Sort the clients by jointly consider latency and loss
                     candidates_ids = sorted(available_ids,
-                                        key=lambda i: div[i] - self.gamma * delays[i],
-                                        reverse=True)
+                                            key=lambda i: div[i] - self.gamma * delays[i],
+                                            reverse=True)
                     print([div[i] for i in candidates_ids])
                     print([self.gamma * delays[i] for i in candidates_ids])
+
+                else:
+                    candidates_ids = available_ids.tolist()
 
             elif self.select_type == 'tier':
                 # Select a tier based on probabilities
@@ -269,7 +276,8 @@ class ClientSelection(object):
                     "client select type not implemented: {}".format(self.select_type))
 
             # Pick the first k clients
-            sample_clients_ids = candidates_ids[:select_num]
+            k = min(select_num, len(candidates_ids))
+            sample_clients_ids = candidates_ids[:k]
 
         sample_clients_ids = np.array(sample_clients_ids, dtype=np.int32)
         logging.info('selected client ids: {}'.format(sample_clients_ids))

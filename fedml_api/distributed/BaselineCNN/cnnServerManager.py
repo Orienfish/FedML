@@ -132,6 +132,10 @@ class BaselineCNNServerManager(ServerManager):
         self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - 1)
         self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
 
+        logging.info("Receive model index = {} "
+                     "Received num = {}".format(
+            sender_id - 1,
+            sum(self.flag_client_model_uploaded)))
         self.aggregator.add_local_trained_result(sender_id - 1, cnn_params, local_sample_number)
 
 
@@ -157,11 +161,11 @@ class BaselineCNNServerManager(ServerManager):
             if received_num >= self.worker_num:  # all received
                 # Start the first round from client selection
                 select_ids = self.cs.select(self.select_num, self.flag_client_model_uploaded)
-                logging.info(select_ids.dtype)
-                for idx in select_ids:
-                    self.send_message_sync_model_to_client(idx + 1,
-                                                           self.round_idx)
-                    self.flag_client_model_uploaded[idx] = False
+                if select_ids.size > 0:
+                    for idx in select_ids:
+                        self.send_message_sync_model_to_client(idx + 1,
+                                                               self.round_idx)
+                        self.flag_client_model_uploaded[idx] = False
 
                 break  # End the thread
 
@@ -172,10 +176,6 @@ class BaselineCNNServerManager(ServerManager):
     def sync_aggregate(self):
         # Sync aggregation
         global_model_params = self.aggregator.aggregate(self.flag_client_model_uploaded)
-
-        # Reset
-        for idx in range(self.worker_num):
-            self.flag_client_model_uploaded[idx] = False
 
         # Test
         test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
@@ -203,10 +203,11 @@ class BaselineCNNServerManager(ServerManager):
         else:
             # Client selection
             select_ids = self.cs.select(self.select_num, self.flag_client_model_uploaded)
-            for idx in select_ids:
-                self.send_message_sync_model_to_client(idx + 1,
-                                                       self.round_idx)
-                self.flag_client_model_uploaded[idx] = False
+            if select_ids.size > 0:
+                for idx in select_ids:
+                    self.send_message_sync_model_to_client(idx + 1,
+                                                           self.round_idx)
+                    self.flag_client_model_uploaded[idx] = False
 
     def handle_message_receive_model_from_client_async(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -264,10 +265,11 @@ class BaselineCNNServerManager(ServerManager):
             else:
                 # Client selection
                 select_ids = self.cs.select(1, self.flag_client_model_uploaded)
-                for idx in select_ids:
-                    self.send_message_sync_model_to_client(idx + 1,
-                                                           self.round_idx)
-                    self.flag_client_model_uploaded[idx] = False
+                if select_ids.size > 0:
+                    for idx in select_ids:
+                        self.send_message_sync_model_to_client(idx + 1,
+                                                               self.round_idx)
+                        self.flag_client_model_uploaded[idx] = False
 
     def handle_init_register_from_client(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)

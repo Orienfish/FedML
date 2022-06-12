@@ -39,7 +39,6 @@ class BaselineCNNAggregator(object):
         self.classifier.set_model_params(model_parameters)
 
     def add_local_trained_result(self, index, model_params, sample_num):
-        logging.info("Receive model index = %d" % index)
         self.model_dict[index] = model_params
         self.sample_num_dict[index] = sample_num
 
