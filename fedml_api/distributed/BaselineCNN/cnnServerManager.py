@@ -133,9 +133,8 @@ class BaselineCNNServerManager(ServerManager):
         self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
 
         logging.info("Receive model index = {} "
-                     "Received num = {}".format(
-            sender_id - 1,
-            sum(self.flag_client_model_uploaded)))
+                     "Received num = {}".format(sender_id - 1, sum(self.flag_client_model_uploaded)))
+        logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
         self.aggregator.add_local_trained_result(sender_id - 1, cnn_params, local_sample_number)
 
 
@@ -236,6 +235,8 @@ class BaselineCNNServerManager(ServerManager):
         # Update information for client selection
         self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - 1)
         self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
+
+        logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
 
         if self.warmup_done:
             self.round_idx += 1
