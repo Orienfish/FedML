@@ -32,12 +32,12 @@ class BaseCNN_Trainer(object):
     """
 
     def train(self):
-        #old_cnn_params = self.trainer.get_model_params()
+        old_cnn_params = self.trainer.get_model_params()
         self.trainer.train(self.train_local, self.args)
 
         cnn_params = self.trainer.get_model_params()
-        cnn_grads = self.trainer.get_model_grads()
-        #cnn_grads = self.trainer.get_delta_params(old_cnn_params)
+        #cnn_grads = self.trainer.get_model_grads()
+        cnn_grads = self.trainer.get_delta_params(old_cnn_params)
 
         return cnn_params, cnn_grads, self.local_sample_number, self.trainer.loss
 
