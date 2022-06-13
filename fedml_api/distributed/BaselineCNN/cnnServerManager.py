@@ -25,7 +25,7 @@ from .utils import transform_tensor_to_list
 running = True
 def terminate():
     while True:
-        time.sleep(10)
+        time.sleep(20)
         # print('hello')
         if not running:
             try:
@@ -141,7 +141,7 @@ class BaselineCNNServerManager(ServerManager):
         # A threaded process that periodically checks whether the sync aggregation
         # can be triggered
         while True:
-            time.sleep(10)
+            time.sleep(20)
             uploaded_num = sum(self.flag_client_model_uploaded)
             not_returned = ~np.array(self.flag_available)
             waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
@@ -164,7 +164,7 @@ class BaselineCNNServerManager(ServerManager):
     def warmup_checker(self):
         # A threaded process that periodically checks whether the warmup is done
         while True:
-            time.sleep(10)
+            time.sleep(20)
             uploaded_num = sum(self.flag_client_model_uploaded)
             not_returned = ~np.array(self.flag_available)
             waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
@@ -294,7 +294,7 @@ class BaselineCNNServerManager(ServerManager):
                 running = False
             else:
                 # Client selection
-                select_ids = self.cs.select(1, self.flag_available)
+                select_ids = self.cs.select(self.select_num, self.flag_available)
                 if select_ids.size > 0:
                     for idx in select_ids:
                         self.send_message_sync_model_to_client(idx + 1,

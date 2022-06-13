@@ -160,6 +160,10 @@ class ClientSelection(object):
         available_ids = np.arange(self.n_clients, dtype=np.int32)[available]
         selected = np.array([False for _ in range(self.n_clients)])
 
+        # Only select the number of clients to make unavailable (not returned)
+        # clients to be select_num
+        select_num = select_num - np.sum(~available)
+
         logging.info('Available clients: {}'.format(available))
 
         if self.select_type == 'divfl':
