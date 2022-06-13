@@ -146,13 +146,13 @@ class BaselineCNNServerManager(ServerManager):
             not_returned = ~np.array(self.flag_available)
             waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
             if np.sum(not_returned) > 0:
-                logging.info(not_returned)
+                logging.info('not returned: {}'.format(not_returned))
                 logging.info('sync waiting time: {}'.format(waiting_time_since_start))
                 min_waiting_time = np.min(waiting_time_since_start)
             else:
                 min_waiting_time = 0.0
 
-            if uploaded_num >= self.worker_num or \
+            if uploaded_num >= self.select_num or \
                     (uploaded_num > 0 and min_waiting_time >= self.round_delay_limit):
                 # All received or exceed time limit
                 logging.info('Sync Aggregation!')
@@ -169,7 +169,7 @@ class BaselineCNNServerManager(ServerManager):
             not_returned = ~np.array(self.flag_available)
             waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
             if np.sum(not_returned) > 0:
-                logging.info(not_returned)
+                logging.info('not returned: {}'.format(not_returned))
                 logging.info('warmup waiting time: {}'.format(waiting_time_since_start))
                 min_waiting_time = np.min(waiting_time_since_start)
             else:
