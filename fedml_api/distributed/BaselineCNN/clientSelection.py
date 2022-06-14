@@ -13,7 +13,7 @@ class Tier(object):
 
 class ClientSelection(object):
     """Client selection decision making."""
-    def __init__(self, n_clients, select_type, rounds, gamma):
+    def __init__(self, n_clients, select_type, rounds, gamma, trial_name):
         self.n_clients = n_clients
         self.select_type = select_type
         self.rounds = rounds
@@ -32,6 +32,8 @@ class ClientSelection(object):
         # Perform light-weight profiling on clients
         if self.select_type == 'tier':
             self.tiers = self.tier_profiling()
+
+        self.log_file = 'logcs_{}'.format(trial_name)
 
     def update_loss_n_delay(self, losses, delays, client_id='all'):
         # if client_id = 'all', losses: numpy array of losses on all clients, (n,)
@@ -74,7 +76,7 @@ class ClientSelection(object):
 
         # print(client_id, grads[:10])
         # print(self.grads[:, :10])
-        # logging.info(self.dissimil_mat)
+        logging.info(self.dissimil_mat)
 
     def tier_profiling(self):
         # Sort clients by delay, fastest first
@@ -162,7 +164,7 @@ class ClientSelection(object):
 
         # Only select the number of clients to make unavailable (not returned)
         # clients to be select_num
-        select_num = select_num - np.sum(~available)
+        # select_num = select_num - np.sum(~available)
 
         logging.info('Available clients: {}'.format(available))
 
@@ -246,13 +248,24 @@ class ClientSelection(object):
                     div = eta + v
                     mean, var = np.mean(div), np.std(div)
                     div = (div - mean) / var
+                    logging.info('loss: {}'.format(self.losses))
+                    logging.info('eta: {}'.format(eta))
+                    logging.info('v: {}'.format(v))
 
                     # Sort the clients by jointly consider latency and loss
                     candidates_ids = sorted(available_ids,
                                             key=lambda i: div[i] - self.gamma * delays[i],
                                             reverse=True)
-                    print([div[i] for i in candidates_ids])
-                    print([self.gamma * delays[i] for i in candidates_ids])
+                    logging.info('div: {}'.format([div[i] for i in candidates_ids]))
+                    logging.info('delays: {}'.format([self.gamma * delays[i] for i in candidates_ids]))
+
+                    with open(self.log_file, 'a') as f:
+                        f.write('Available clients: {}\n'.format(available))
+                        f.write('loss: {}\n'.format(self.losses))
+                        f.write('eta: {}\n'.format(eta))
+                        f.write('v: {}\n'.format(v))
+                        f.write('div: {}\n'.format([div[i] for i in candidates_ids]))
+                        f.write('delays: {}\n'.format([self.gamma * delays[i] for i in candidates_ids]))
 
                 else:
                     candidates_ids = available_ids.tolist()
@@ -285,4 +298,8 @@ class ClientSelection(object):
 
         sample_clients_ids = np.array(sample_clients_ids, dtype=np.int32)
         logging.info('selected client ids: {}'.format(sample_clients_ids))
+
+        with open(self.log_file, 'a') as f:
+            f.write('selected client ids: {}\n\n'.format(sample_clients_ids))
+
         return sample_clients_ids

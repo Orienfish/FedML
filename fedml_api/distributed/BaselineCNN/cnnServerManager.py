@@ -54,7 +54,9 @@ class BaselineCNNServerManager(ServerManager):
         self.batch_selection = batch_selection
 
         # For client selection
-        self.cs = ClientSelection(self.worker_num, args.selection, self.round_num, args.cs_gamma)
+        self.cs = ClientSelection(self.worker_num, args.selection,
+                                  self.round_num, args.cs_gamma,
+                                  args.trial_name)
 
         # For results records
         self.start_time = time.time()
@@ -136,6 +138,8 @@ class BaselineCNNServerManager(ServerManager):
         logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
         self.aggregator.add_local_trained_result(sender_id - 1, cnn_params, local_sample_number)
 
+        self.log_delay()
+
 
     def sync_aggregate_trigger(self):
         # A threaded process that periodically checks whether the sync aggregation
@@ -195,8 +199,9 @@ class BaselineCNNServerManager(ServerManager):
         logging.info('Start the experiment!')
 
         # Create a thread to trigger sync aggregation
-        self.sync_agg = threading.Thread(target=self.sync_aggregate_trigger)
-        self.sync_agg.start()
+        if self.args.method == 'fedavg':
+            self.sync_agg = threading.Thread(target=self.sync_aggregate_trigger)
+            self.sync_agg.start()
 
     def sync_aggregate(self):
         # Sync aggregation
@@ -263,6 +268,7 @@ class BaselineCNNServerManager(ServerManager):
         self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
 
         logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
+        self.log_delay()
 
         if self.warmup_done:
             self.round_idx += 1
@@ -294,7 +300,7 @@ class BaselineCNNServerManager(ServerManager):
                 running = False
             else:
                 # Client selection
-                select_ids = self.cs.select(self.select_num, self.flag_available)
+                select_ids = self.cs.select(1, self.flag_available)
                 if select_ids.size > 0:
                     for idx in select_ids:
                         self.send_message_sync_model_to_client(idx + 1,
@@ -351,7 +357,7 @@ class BaselineCNNServerManager(ServerManager):
         message = Message(MyMessage.MSG_TYPE_S2C_FINISH, self.get_sender_id(), receive_id)
         self.send_message(message)
 
-    def log(self, cur_time, test_loss, accuracy):
+    def log_delay(self):
         # Log the round and comp delays in the latest round
         with open(self.round_delay_log, 'a+') as out:
             np.savetxt(out, np.array(self.round_delay).reshape((1, -1)),
@@ -363,6 +369,7 @@ class BaselineCNNServerManager(ServerManager):
                        delimiter=',')
         self.comp_delay = [0.0 for _ in range(self.worker_num)]
 
+    def log(self, cur_time, test_loss, accuracy):
         # Log the test loss and accuracy
         with open(self.acc_log, 'a+') as out:
             out.write('{},{},{},{}\n'.format(self.round_idx, cur_time,
