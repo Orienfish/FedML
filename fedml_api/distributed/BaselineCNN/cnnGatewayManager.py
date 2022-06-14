@@ -14,31 +14,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../../FedML")))
 try:
     from FedML.fedml_core.distributed.communication.message import Message
-    from FedML.fedml_core.distributed.server.server_manager import ServerManager
+    from FedML.fedml_core.distributed.server.server_manager import GatewayManager
 except ModuleNotFoundError: # except ImportError
     from fedml_core.distributed.communication.message import Message
-    from fedml_core.distributed.server.server_manager import ServerManager
+    from fedml_core.distributed.server.server_manager import GatewayManager
 
 from .utils import transform_list_to_tensor
 from .utils import transform_tensor_to_list
 
-running = True
-def terminate():
-    while True:
-        time.sleep(20)
-        # print('hello')
-        if not running:
-            try:
-                for line in os.popen('ps aux | grep app_CNN.py | grep -v grep'):
-                    fields = line.split()
-                    pid = fields[1]
-                    print('extracted pid: ', pid)
-                    os.kill(int(pid), signal.SIGKILL)
-            except:
-                print('Error encountered while running killing script')
 
-
-class BaselineCNNServerManager(ServerManager):
+class BaselineCNNGatewayManager(GatewayManager):
     def __init__(self, args, aggregator, logger, comm=None, rank=0, size=0,
                  backend="MQTT", mqtt_host="127.0.0.1", mqtt_port=1883,
                  is_preprocessed=False, batch_selection=None):
@@ -63,12 +48,21 @@ class BaselineCNNServerManager(ServerManager):
         self.round_start_time = [0.0 for _ in range(self.worker_num)]
         self.round_delay = [0.0 for _ in range(self.worker_num)]
         self.comp_delay = [0.0 for _ in range(self.worker_num)]
-        self.round_delay_log = os.path.join(args.result_dir, 'round_delay.txt')
-        self.comp_delay_log = os.path.join(args.result_dir, 'comp_delay.txt')
-        self.acc_log = os.path.join(args.result_dir, 'acc.txt')
+        #self.round_delay_log = os.path.join(args.result_dir, 'round_delay.txt')
+        #self.comp_delay_log = os.path.join(args.result_dir, 'comp_delay.txt')
+        self.acc_log = os.path.join(args.result_dir, 'gw{}_acc.txt'.format(rank))
         self.tb_logger = logger
 
+        # Indicator of which client is connected to the gateway
+        # The client-gateway association decision is made at the server,
+        # so this vector is updated by the server
+        self.conn_clients = [False for _ in range(self.worker_num)]
+
+        # Indicator of the status of the clients
+        # Since the gateway can only know the status of the clients that is connected to it,
+        # this vector is periodically synced with the server
         self.flag_available = [True for _ in range(self.worker_num)]
+
         # Indicator of which client has uploaded in sync aggregation
         # This is related but different from the availability of the clients
         # If True, client has uploaded the model and finished last round, thus available
@@ -97,11 +91,11 @@ class BaselineCNNServerManager(ServerManager):
         self.warmup_thread.start()
 
         if self.args.method == 'fedavg':
-            self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
+            self.register_message_receive_handler(MyMessage.MSG_TYPE_C2G_SEND_MODEL_TO_GATEWAY,
                                                   self.handle_message_receive_model_from_client_sync)
 
         elif self.args.method == 'fedasync':
-            self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
+            self.register_message_receive_handler(MyMessage.MSG_TYPE_C2G_SEND_MODEL_TO_GATEWAY,
                                                   self.handle_message_receive_model_from_client_async)
 
     def handle_message_receive_model_from_client_sync(self, msg_params):

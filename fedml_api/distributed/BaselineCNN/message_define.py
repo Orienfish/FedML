@@ -12,6 +12,18 @@ class MyMessage(object):
     MSG_TYPE_C2S_SEND_STATS_TO_SERVER = 6
     MSG_TYPE_C2S_INIT_REGISTER = 7
 
+    # client to gateway
+    MSG_TYPE_C2G_SEND_MODEL_TO_GATEWAY = 8
+
+    # gateway to client
+    MSG_TYPE_G2C_SYNC_MODEL_TO_CLIENT = 9
+
+    # gateway to server
+    MSG_TYPE_G2S_SEND_MODEL_TO_SERVER = 10
+
+    # server to gateway
+    MSG_TYPE_S2G_SYNC_MODEL_TO_GATEWAY = 11
+
     MSG_ARG_KEY_TYPE = "msg_type"
     MSG_ARG_KEY_SENDER = "sender"
     MSG_ARG_KEY_RECEIVER = "receiver"

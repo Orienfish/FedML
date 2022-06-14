@@ -12,8 +12,8 @@ from ..observer import Observer
 
 
 class MqttCommManager(BaseCommunicationManager):
-    def __init__(self, host, port, topic='fedml', client_id=0, client_num=0,
-                 gateway_num=0):
+    def __init__(self, host, port, topic='fedml', client_id=0,
+                 client_num=0, gateway_num=0):
         self._unacked_sub = list()
         self._observers: List[Observer] = []
         self._topic = topic
@@ -133,10 +133,9 @@ class MqttCommManager(BaseCommunicationManager):
         """
         receiver_id = msg.get_receiver_id()
         topic = self._topic + str(self.client_id) + "_" + str(receiver_id)
-        logging.info("topic = %s" % str(topic))
         payload = msg.to_json()
         self._client.publish(topic, payload=payload, qos=qos)
-        logging.info("sent")
+        logging.info("sent {} to {}".format(str(topic), receiver_id))
 
     def handle_receive_message(self):
         pass

@@ -15,7 +15,8 @@ class ServerManager(Observer):
     def __init__(self, args, comm=None, rank=0, size=0, backend="MPI",
                  mqtt_host="127.0.0.1", mqtt_port=1883):
         self.args = args
-        self.size = size
+        self.client_num = args.client_num_in_total
+        self.gateway_num = args.gateway_num_in_total
         self.rank = rank
 
         self.backend = backend
@@ -25,7 +26,8 @@ class ServerManager(Observer):
             HOST = mqtt_host
             # HOST = "broker.emqx.io"
             PORT = mqtt_port
-            self.com_manager = MqttCommManager(HOST, PORT, client_id=rank, client_num=size - 1)
+            self.com_manager = MqttCommManager(HOST, PORT, client_id=rank,
+                                               client_num=self.client_num, gateway_num=self.gateway_num)
         else:
             self.com_manager = MpiCommunicationManager(comm, rank, size, node_type="server")
         self.com_manager.add_observer(self)
