@@ -26,10 +26,10 @@ from FedML.fedml_core.distributed.communication.mqtt.mqtt_comm_manager import Mq
 # send another init register to server
 class myMqttCommManager(MqttCommManager):
     def __init__(self, host, port, client_mgr, topic='fedml', client_id=0,
-                 client_num=0):
+                 client_num=0, gateway_num=0):
         self.client_mgr = client_mgr
-        super().__init__(host, port, topic=topic,
-                         client_id=client_id, client_num=client_num)
+        super().__init__(host, port, topic=topic, client_id=client_id,
+                         client_num=client_num, gateway_num=gateway_num)
 
     def _on_connect(self, client, userdata, flags, rc):
         """
@@ -94,7 +94,8 @@ class myMqttCommManager(MqttCommManager):
 class BaseCNNClientManager(ClientManager):
     def __init__(self, mqtt_port, mqtt_host, args, trainer, comm=None, rank=0, size=0, backend="MQTT"):
         self.args = args
-        self.size = size
+        self.client_num = args.client_num_in_total
+        self.gateway_num = args.gateway_num_in_total
         self.rank = rank
 
         self.backend = backend
@@ -106,7 +107,7 @@ class BaseCNNClientManager(ClientManager):
             # HOST = "broker.emqx.io"
             PORT = mqtt_port
             self.com_manager = myMqttCommManager(HOST, PORT, self, client_id=rank,
-                                                 client_num=size - 1)
+                                                 client_num=self.client_num, gateway_num=self.gateway_num)
         else:
             self.com_manager = MpiCommunicationManager(comm, rank, size,
                                                        node_type="client")
@@ -123,13 +124,14 @@ class BaseCNNClientManager(ClientManager):
     def register_message_receive_handlers(self):
         self.register_message_receive_handler(MyMessage.MSG_TYPE_S2C_INIT_CONFIG,
                                               self.handle_message_init_from_server)
-        self.register_message_receive_handler(MyMessage.MSG_TYPE_S2C_SYNC_MODEL_TO_CLIENT,
-                                              self.handle_message_receive_model_from_server)
+        self.register_message_receive_handler(MyMessage.MSG_TYPE_G2C_SYNC_MODEL_TO_CLIENT,
+                                              self.handle_message_receive_model_from_gateway)
         self.register_message_receive_handler(MyMessage.MSG_TYPE_S2C_FINISH,
                                               self.handle_message_finish_from_server)
 
     def handle_message_init_from_server(self, msg_params):
         logging.info("handle_message_init_from_server.")
+        sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
         self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
@@ -138,10 +140,11 @@ class BaseCNNClientManager(ClientManager):
 
         self.trainer.update_model(global_cnn_params)
         self.round_idx = 0
-        self.__train()
+        self.__train(sender_id)
 
-    def handle_message_receive_model_from_server(self, msg_params):
-        logging.info("handle_message_receive_model_from_server.")
+    def handle_message_receive_model_from_gateway(self, msg_params):
+        logging.info("handle_message_receive_model_from_gateway.")
+        sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
         self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
@@ -151,7 +154,7 @@ class BaseCNNClientManager(ClientManager):
         self.trainer.update_model(global_cnn_params)
 
         self.round_idx += 1
-        self.__train()
+        self.__train(sender_id)
 
     def handle_message_finish_from_server(self, msg_params):
         logging.info("handle_message_finish from server.")
@@ -178,10 +181,10 @@ class BaseCNNClientManager(ClientManager):
         self.send_message(message)
 
 
-    def __train(self):
+    def __train(self, receive_id):
         logging.info("#######training########### round_id = %d" % self.round_idx)
         start = time.time()
         cnn_params, cnn_grads, local_sample_num, local_loss = self.trainer.train()
         local_comp_delay = time.time() - start
-        self.send_model_to_server(0, cnn_params, cnn_grads, local_sample_num,
+        self.send_model_to_server(receive_id, cnn_params, cnn_grads, local_sample_num,
                                   local_loss, local_comp_delay)
