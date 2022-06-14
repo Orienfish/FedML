@@ -61,7 +61,7 @@ class ClientSelection(object):
         self.grads[client_id, :] = np.array(grads)
         self.num_samples[client_id] = num_samples
         self.avg_grad = np.sum(
-            np.multiply(grads, self.num_samples), axis=0
+            np.multiply(self.grads, self.num_samples), axis=0
         ) / np.sum(self.num_samples)  # (n,)
 
         self.grads_err_mat[client_id, :] = np.sum(
