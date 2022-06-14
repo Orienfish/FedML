@@ -12,7 +12,8 @@ from ..observer import Observer
 
 
 class MqttCommManager(BaseCommunicationManager):
-    def __init__(self, host, port, topic='fedml', client_id=0, client_num=0):
+    def __init__(self, host, port, topic='fedml', client_id=0, client_num=0,
+                 gateway_num=0):
         self._unacked_sub = list()
         self._observers: List[Observer] = []
         self._topic = topic
@@ -21,6 +22,7 @@ class MqttCommManager(BaseCommunicationManager):
         else:
             self._client_id = client_id
         self.client_num = client_num
+        self.gateway_num = gateway_num
         # Construct a Client
         self._client = mqtt.Client(client_id=str(self._client_id))
         self._client.on_connect = self._on_connect
@@ -46,28 +48,56 @@ class MqttCommManager(BaseCommunicationManager):
 
     def _on_connect(self, client, userdata, flags, rc):
         """
-            [server]
-            sending message topic (publish): serverID_clientID
-            receiving message topic (subscribe): clientID
-
-            [client]
-            sending message topic (publish): clientID
-            receiving message topic (subscribe): serverID_clientID
-
+            sending message topic (publish): senderID_receiverID
+            receiving message topic (subscribe): receiverID_sender
         """
         logging.info("_on_connect: Connection returned with result code: {}".format(str(rc)))
         # subscribe one topic
         if self.client_id == 0:
             # server
+            # subscribe to client
             for client_ID in range(1, self.client_num+1):
-                result, mid = self._client.subscribe(self._topic + str(client_ID), 0)
+                result, mid = self._client.subscribe(
+                    self._topic + str(client_ID) + '_' + str(0), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
-        else:
-            # client
-            result, mid = self._client.subscribe(self._topic + str(0) + "_" + str(self.client_id), 0)
+
+            # subscribe to gateway
+            for gateway_ID in range(100, self.gateway_num + 1):
+                result, mid = self._client.subscribe(
+                    self._topic + str(gateway_ID) + '_' + str(0), 0)
+                self._unacked_sub.append(mid)
+                # print(result)
+
+        elif self.client_id >= 100:
+            # gateway
+            # subscribe to client
+            for client_ID in range(1, self.client_num + 1):
+                result, mid = self._client.subscribe(
+                    self._topic + str(client_ID) + '_' + str(self.client_id), 0)
+                self._unacked_sub.append(mid)
+                # print(result)
+
+            # subscribe to server
+            result, mid = self._client.subscribe(
+                self._topic + str(0) + '_' + str(self.client_id), 0)
             self._unacked_sub.append(mid)
             # print(result)
+
+        else:
+            # client
+            # subscribe to server
+            result, mid = self._client.subscribe(
+                self._topic + str(0) + "_" + str(self.client_id), 0)
+            self._unacked_sub.append(mid)
+            # print(result)
+
+            # subscribe to gateway
+            for gateway_ID in range(100, self.gateway_num + 1):
+                result, mid = self._client.subscribe(
+                    self._topic + str(gateway_ID) + '_' + str(self.client_id), 0)
+                self._unacked_sub.append(mid)
+                # print(result)
 
     def _on_message(self, client, userdata, msg):
         msg.payload = str(msg.payload, encoding='utf-8')
@@ -98,28 +128,15 @@ class MqttCommManager(BaseCommunicationManager):
 
     def send_message(self, msg: Message, qos=0):
         """
-            [server]
-            sending message topic (publish): serverID_clientID
-            receiving message topic (subscribe): clientID
-
-            [client]
-            sending message topic (publish): clientID
-            receiving message topic (subscribe): serverID_clientID
-
+            sending message topic (publish): senderID_receiverID
+            receiving message topic (subscribe): receiverID_sender
         """
-        if self.client_id == 0:
-            # server
-            receiver_id = msg.get_receiver_id()
-            topic = self._topic + str(0) + "_" + str(receiver_id)
-            logging.info("topic = %s" % str(topic))
-            payload = msg.to_json()
-            self._client.publish(topic, payload=payload, qos=qos)
-            logging.info("sent")
-        else:
-            # client
-            self._client.publish(self._topic + str(self.client_id),
-                                 payload=msg.to_json())
-            logging.info("published")
+        receiver_id = msg.get_receiver_id()
+        topic = self._topic + str(self.client_id) + "_" + str(receiver_id)
+        logging.info("topic = %s" % str(topic))
+        payload = msg.to_json()
+        self._client.publish(topic, payload=payload, qos=qos)
+        logging.info("sent")
 
     def handle_receive_message(self):
         pass
