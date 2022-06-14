@@ -33,28 +33,59 @@ class myMqttCommManager(MqttCommManager):
 
     def _on_connect(self, client, userdata, flags, rc):
         """
-            [server]
-            sending message topic (publish): serverID_clientID
-            receiving message topic (subscribe): clientID
-
-            [client]
-            sending message topic (publish): clientID
-            receiving message topic (subscribe): serverID_clientID
-
+            sending message topic (publish): senderID_receiverID
+            receiving message topic (subscribe): receiverID_sender
         """
-        logging.info("_on_connect: Connection returned with result code: {}".format(str(rc)))
+        logging.info(
+            "_on_connect: Connection returned with result code: {}".format(
+                str(rc)))
         # subscribe one topic
         if self.client_id == 0:
             # server
+            # subscribe to client
             for client_ID in range(1, self.client_num + 1):
-                result, mid = self._client.subscribe(self._topic + str(client_ID), 0)
+                result, mid = self._client.subscribe(
+                    self._topic + str(client_ID) + '_' + str(0), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
-        else:
-            # client
-            result, mid = self._client.subscribe(self._topic + str(0) + "_" + str(self.client_id), 0)
+
+            # subscribe to gateway
+            for gateway_ID in range(100, self.gateway_num + 1):
+                result, mid = self._client.subscribe(
+                    self._topic + str(gateway_ID) + '_' + str(0), 0)
+                self._unacked_sub.append(mid)
+                # print(result)
+
+        elif self.client_id >= 100:
+            # gateway
+            # subscribe to client
+            for client_ID in range(1, self.client_num + 1):
+                result, mid = self._client.subscribe(
+                    self._topic + str(client_ID) + '_' + str(self.client_id), 0)
+                self._unacked_sub.append(mid)
+                # print(result)
+
+            # subscribe to server
+            result, mid = self._client.subscribe(
+                self._topic + str(0) + '_' + str(self.client_id), 0)
             self._unacked_sub.append(mid)
             # print(result)
+
+        else:
+            # client
+            # subscribe to server
+            result, mid = self._client.subscribe(
+                self._topic + str(0) + "_" + str(self.client_id), 0)
+            self._unacked_sub.append(mid)
+            # print(result)
+
+            # subscribe to gateway
+            for gateway_ID in range(100, self.gateway_num + 1):
+                result, mid = self._client.subscribe(
+                    self._topic + str(gateway_ID) + '_' + str(self.client_id),
+                    0)
+                self._unacked_sub.append(mid)
+                # print(result)
 
             # This is the major difference for the client
             self.client_mgr.send_register_to_server()
