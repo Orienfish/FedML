@@ -48,6 +48,8 @@ class BaselineCNNServerManager(ServerManager):
         self.worker_num = args.client_num_in_total
         self.select_num = args.client_num_per_gateway
         self.gateway_num = args.gateway_num_in_total
+        self.gateway_offset = 1                             # The ID of first gateway in MQTT
+        self.client_offset = args.gateway_num_in_total + 1  # The ID of first client in MQTT
         self.round_num = args.comm_round
         self.round_delay_limit = args.round_delay_limit  # Only used in warmup
         self.adjust_round = args.adjust_round
@@ -61,7 +63,7 @@ class BaselineCNNServerManager(ServerManager):
 
         # For results records
         self.start_time = time.time()
-        self.round_start_time = [0.0 for _ in range(self.worker_num)]  # Used in warmup
+        self.round_start_time = [0.0 for _ in range(self.worker_num)]  # Only used in warmup
         #self.round_delay = [0.0 for _ in range(self.worker_num)]
         #self.comp_delay = [0.0 for _ in range(self.worker_num)]
         #self.round_delay_log = os.path.join(args.result_dir, 'round_delay.txt')
@@ -78,16 +80,18 @@ class BaselineCNNServerManager(ServerManager):
         # Indicator of the status of the clients
         # Since the gateway can only know the status of the clients that is connected to it,
         # this vector is periodically synced with the server
-        self.flag_available = np.array([True for _ in range(self.worker_num)],
-                                       dtype=np.bool)
+        #self.flag_available = np.array([True for _ in range(self.gateway_num)],
+        #                               dtype=np.bool)
 
         # Indicator of which client has uploaded in sync aggregation
         # This is related but different from the availability of the clients
         # If True, client has uploaded the model and finished last round, thus available
         # If False, the local round has not returned, thus unavailable
         # Formally, flag_available >= flag_client_model_uploaded
-        self.flag_client_model_uploaded = np.array([False for _ in range(self.worker_num)],
-                                                   dtype=np.bool)
+        self.flag_gateway_model_uploaded = np.array([False for _ in range(self.gateway_num)],
+                                                    dtype=np.bool)
+        self.flag_client_model_uploaded = np.array([False for _ in range(self.client_num)],
+                                                    dtype=np.bool)  # Only used in warmup
 
         # Start from warmup
         self.warmup_done = False
@@ -100,7 +104,7 @@ class BaselineCNNServerManager(ServerManager):
 
     def send_init_msg(self):
         global_model_params = self.aggregator.get_global_model_params()
-        for receiver_id in range(1, self.client_num):
+        for receiver_id in range(self.client_offset, self.client_offset + self.client_num):
             self.send_message_init_to_client(receiver_id, global_model_params, 0)
 
     def register_message_receive_handlers(self):
@@ -123,7 +127,7 @@ class BaselineCNNServerManager(ServerManager):
                      "sender_id = {}".format(sender_id))
 
         # Update flag record
-        self.flag_client_model_uploaded[sender_id - 1] = True
+        self.flag_gateway_model_uploaded[sender_id - self.gateway_offset] = True
         # self.flag_available[sender_id - 1] = True
 
         # Receive the information from clients
@@ -145,14 +149,16 @@ class BaselineCNNServerManager(ServerManager):
             self.ca.update_grads(grads_dict[k], num_samples_dict[k], k)
 
         logging.info("Receive model index = {} "
-                     "Received num = {}".format(sender_id - 1, sum(self.flag_client_model_uploaded)))
-        logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
+                     "Received num = {}".format(sender_id - self.gateway_offset,
+                                                sum(self.flag_gateway_model_uploaded)))
+        logging.info('flag uploaded: {}'.format(self.flag_gateway_model_uploaded))
         local_sample_number = sum([num_samples_dict[k] for k in num_samples_dict.keys()])
-        self.aggregator.add_local_trained_result(sender_id - 1, cnn_params, local_sample_number)
+        self.aggregator.add_local_trained_result(sender_id - self.gateway_offset,
+                                                 cnn_params, local_sample_number)
 
-        if sum(self.flag_client_model_uploaded) >= self.gateway_num:
+        if sum(self.flag_gateway_model_uploaded) >= self.gateway_num:
             # Sync aggregation
-            global_model_params = self.aggregator.aggregate(self.flag_client_model_uploaded)
+            global_model_params = self.aggregator.aggregate(self.flag_gateway_model_uploaded)
 
             # Test
             test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
@@ -178,13 +184,18 @@ class BaselineCNNServerManager(ServerManager):
                 self.conn_clients = self.ca.solve()
 
             if self.round_idx == self.round_num or accuracy >= self.args.target_accuracy:
-                for receiver_id in range(1, self.client_num):
-                    self.send_message_finish_to_client(receiver_id)
+                for gateway_id in range(self.gateway_offset,
+                                        self.gateway_offset + self.gateway_num):
+                    self.send_message_finish_to_client(gateway_id)
+                for client_id in range(self.client_offset,
+                                       self.client_offset + self.client_num):
+                    self.send_message_finish_to_client(client_id)
                 global running
                 running = False
             else:
                 # gateway trigger
-                for gateway_id in range(self.gateway_num):
+                for gateway_id in range(self.gateway_offset,
+                                        self.gateway_offset + self.gateway_num):
                     self.send_message_sync_model_to_gateway(gateway_id,
                                                             self.round_idx)
 
@@ -193,7 +204,7 @@ class BaselineCNNServerManager(ServerManager):
         while True:
             time.sleep(20)
             uploaded_num = sum(self.flag_client_model_uploaded)
-            not_returned = ~np.array(self.flag_available)
+            not_returned = ~np.array(self.flag_client_model_uploaded)
             waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
             if np.sum(not_returned) > 0:
                 logging.info('not returned: {}'.format(not_returned))
@@ -228,8 +239,8 @@ class BaselineCNNServerManager(ServerManager):
                      "sender_id = {}".format(sender_id))
 
         # Update flag record
-        self.flag_client_model_uploaded[sender_id - 1] = True
-        self.flag_available[sender_id - 1] = True
+        self.flag_gateway_model_uploaded[sender_id - self.gateway_offset] = True
+        # self.flag_available[sender_id - 1] = True
 
         # Receive the information from clients
         cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
@@ -241,13 +252,13 @@ class BaselineCNNServerManager(ServerManager):
         download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
         round_delay_dict = msg_params.get(MyMessage.MSG_ARG_KEY_ROUND_DELAY_DICT)
-        # loss_dict = msg_params.get(MyMessage.MSG_ARG_KEY_LOSS_DICT)
+        loss_dict = msg_params.get(MyMessage.MSG_ARG_KEY_LOSS_DICT)
         grads_dict = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_GRADS_DICT)
         num_samples_dict = msg_params.get(MyMessage.MSG_ARG_KEY_NUM_SAMPLES_DICT)
         local_sample_number = sum([num_samples_dict[k] for k in num_samples_dict.keys()])
 
         for k in round_delay_dict.keys():
-            self.ca.update_delay_n_rate(round_delay_dict[k], k)
+            self.ca.update_loss_n_delay(loss_dict[k], round_delay_dict[k], k)
             self.ca.update_grads(grads_dict[k], num_samples_dict[k], k)
 
         logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
@@ -258,7 +269,7 @@ class BaselineCNNServerManager(ServerManager):
             self.aggregator.aggregate_async(cnn_params, local_sample_number, staleness)
 
             # Reset flag uploaded
-            self.flag_client_model_uploaded[sender_id - 1] = False
+            self.flag_client_model_uploaded[sender_id - self.gateway_offset] = False
 
             test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
                                                                                  self.batch_selection)
@@ -279,14 +290,21 @@ class BaselineCNNServerManager(ServerManager):
             if self.round_idx % self.adjust_round == 0:
                 self.conn_clients = self.ca.solve()
 
-            if self.round_idx >= self.round_num or accuracy >= self.args.target_accuracy:
-                for receiver_id in range(1, self.client_num):
-                    self.send_message_finish_to_client(receiver_id)
+            if self.round_idx == self.round_num or accuracy >= self.args.target_accuracy:
+                for gateway_id in range(self.gateway_offset,
+                                        self.gateway_offset + self.gateway_num):
+                    self.send_message_finish_to_client(gateway_id)
+                for client_id in range(self.client_offset,
+                                       self.client_offset + self.client_num):
+                    self.send_message_finish_to_client(client_id)
                 global running
                 running = False
             else:
-                self.send_message_sync_model_to_gateway(sender_id-100,
-                                                        self.round_idx)
+                # gateway trigger
+                for gateway_id in range(self.gateway_offset,
+                                        self.gateway_offset + self.gateway_num):
+                    self.send_message_sync_model_to_gateway(gateway_id,
+                                                            self.round_idx)
 
     def handle_init_register_from_client(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -300,34 +318,33 @@ class BaselineCNNServerManager(ServerManager):
     def send_message_init_to_client(self, receive_id, global_model_params, client_index):
         logging.info("send_message_init_to_client. "
                      "receive_id = {} client_idx = {}".format(receive_id, client_index))
-        self.round_start_time[receive_id - 1] = time.time()
+        self.round_start_time[receive_id - self.client_offset] = time.time()
 
         # Set available to False to prevent client selection
-        self.flag_available[receive_id - 1] = False
+        #self.flag_available[receive_id - 1] = False
 
         global_model_params = transform_tensor_to_list(global_model_params)
 
         message = Message(MyMessage.MSG_TYPE_S2C_INIT_CONFIG, self.get_sender_id(), receive_id)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, global_model_params)
-        message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_INDEX, str(client_index))
+        message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_INDEX, str(client_index))  # Not useful
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.round_idx)
         self.send_message(message)
 
-    def send_message_sync_model_to_gateway(self, gateway_id, client_index):
-        receive_id = int(gateway_id)
-        logging.info("send_message_sync_model_to_client. " 
+    def send_message_sync_model_to_gateway(self, receive_id, client_index):
+        logging.info("send_message_sync_model_to_gateway. " 
                      "receive_id = {} client_idx = {}".format(receive_id, client_index))
-        self.round_start_time[receive_id-1] = time.time()
+        #self.round_start_time[receive_id - self.gateway_offset] = time.time()
 
         # Set available to False to prevent client selection
         #self.flag_available[receive_id - 1] = False
 
         global_model_params = self.aggregator.get_global_model_params()
         global_model_params = transform_tensor_to_list(global_model_params)
-        update_ids = self.conn_clients[:, gateway_id]
+        conn_ids = np.arange(self.client_num)[self.conn_clients[:, receive_id - self.gateway_offset]]
 
         round_delay_dict, loss_dict, grads_dict, num_samples_dict = {}, {}, {}, {}
-        for idx in update_ids:
+        for idx in conn_ids:
             round_delay_dict[idx] = self.ca.est_delay[idx]
             loss_dict[idx] = self.ca.losses[idx]
             grads_dict[idx] = self.ca.grads[idx]
@@ -335,7 +352,7 @@ class BaselineCNNServerManager(ServerManager):
 
         message = Message(MyMessage.MSG_TYPE_S2C_SYNC_MODEL_TO_CLIENT, self.get_sender_id(), receive_id)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, global_model_params)
-        message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_ASSOCIATION, update_ids)
+        message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_ASSOCIATION, conn_ids)
         message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_INDEX, str(client_index))
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.round_idx)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_GRADS_DICT, grads_dict)

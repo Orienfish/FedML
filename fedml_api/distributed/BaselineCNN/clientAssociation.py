@@ -21,7 +21,7 @@ class ClientAssociation(object):
         #self.min_cls_num = min(cls_num)
 
         self.est_delay = np.array([0.0 for _ in range(self.n_clients)])
-        # self.losses = np.array([0.0 for _ in range(self.n_clients)])
+        self.losses = np.array([0.0 for _ in range(self.n_clients)])
         self.R = np.array([0.0 for _ in range(self.n_clients)])
         self.grads = None
         self.num_samples = np.array([0 for _ in range(self.n_clients)])
@@ -30,9 +30,10 @@ class ClientAssociation(object):
 
         self.prev_conn = None  # Record the last connection decision
 
-    def update_delay_n_rate(self, delay, client_id):
+    def update_loss_n_delay(self, loss, delay, client_id):
         # if client_id = int, losses: int of loss on client #client_id
         #                     num_samples: int of num_samples on client #client_id
+        self.losses[client_id] = loss
         self.est_delay[client_id] = delay
         self.R[client_id] = 1 / delay
 

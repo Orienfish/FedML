@@ -33,6 +33,8 @@ class BaselineCNNGatewayManager(GatewayManager):
         self.worker_num = args.client_num_in_total
         self.select_num = args.client_num_per_gateway
         self.gateway_round_num = args.gateway_comm_round
+        self.gateway_offset = 1  # The ID of first gateway in MQTT
+        self.client_offset = args.gateway_num_in_total + 1  # The ID of first client in MQTT
         self.round_delay_limit = args.round_delay_limit
         self.round_idx = 0
         self.is_preprocessed = is_preprocessed
@@ -77,11 +79,6 @@ class BaselineCNNGatewayManager(GatewayManager):
     def run(self):
         super().run()
 
-    def send_init_msg(self):
-        global_model_params = self.aggregator.get_global_model_params()
-        for receiver_id in range(1, self.size):
-            self.send_message_init_to_client(receiver_id, global_model_params, 0)
-
     def register_message_receive_handlers(self):
         self.register_message_receive_handler(MyMessage.MSG_TYPE_S2G_SYNC_MODEL_TO_GATEWAY,
                                               self.handle_message_receive_model_from_server)
@@ -100,12 +97,12 @@ class BaselineCNNGatewayManager(GatewayManager):
                      "sender_id = {}".format(sender_id))
 
         # Update flag record
-        self.flag_client_model_uploaded[sender_id - 1] = True
-        self.flag_available[sender_id - 1] = True
+        self.flag_client_model_uploaded[sender_id - self.client_offset] = True
+        self.flag_available[sender_id - self.client_offset] = True
 
         # Record the round delay
-        round_delay = time.time() - self.round_start_time[sender_id - 1]
-        self.round_delay[sender_id - 1] = round_delay
+        round_delay = time.time() - self.round_start_time[sender_id - self.client_offset]
+        self.round_delay[sender_id - self.client_offset] = round_delay
 
         # Receive the information from clients
         cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
@@ -117,16 +114,18 @@ class BaselineCNNGatewayManager(GatewayManager):
         # download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
         # Record the comp delay
-        self.comp_delay[sender_id - 1] = local_comp_delay
+        self.comp_delay[sender_id - self.client_offset] = local_comp_delay
 
         # Update information for client selection
-        self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - 1)
-        self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
+        self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - self.client_offset)
+        self.cs.update_grads(cnn_grads, local_sample_number, sender_id - self.client_offset)
 
         logging.info("Receive model index = {} "
-                     "Received num = {}".format(sender_id - 1, sum(self.flag_client_model_uploaded)))
+                     "Received num = {}".format(sender_id - self.client_offset,
+                                                sum(self.flag_client_model_uploaded)))
         logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
-        self.aggregator.add_local_trained_result(sender_id - 1, cnn_params, local_sample_number)
+        self.aggregator.add_local_trained_result(sender_id - self.client_offset,
+                                                 cnn_params, local_sample_number)
 
         self.log_delay()
 
@@ -176,14 +175,14 @@ class BaselineCNNGatewayManager(GatewayManager):
 
         # start the next round
         self.round_idx += 1
-        if self.round_idx % self.gateway_comm_num == 0:
+        if self.round_idx % self.gateway_round_num == 0:
             self.send_model_to_server(0)
 
         # Client selection for the next gateway round
         select_ids = self.cs.select(self.select_num, self.flag_available)
         if select_ids.size > 0:
             for idx in select_ids:
-                self.send_message_sync_model_to_client(idx + 1,
+                self.send_message_sync_model_to_client(idx + self.client_offset,
                                                        self.round_idx)
 
     def handle_message_receive_model_from_client_async(self, msg_params):
@@ -192,12 +191,12 @@ class BaselineCNNGatewayManager(GatewayManager):
                      "sender_id = {}".format(sender_id))
 
         # Update flag record
-        self.flag_client_model_uploaded[sender_id - 1] = True
-        self.flag_available[sender_id - 1] = True
+        self.flag_client_model_uploaded[sender_id - self.client_offset] = True
+        self.flag_available[sender_id - self.client_offset] = True
 
         # Record the round delay
-        round_delay = time.time() - self.round_start_time[sender_id - 1]
-        self.round_delay[sender_id - 1] = round_delay
+        round_delay = time.time() - self.round_start_time[sender_id - self.client_offset]
+        self.round_delay[sender_id - self.client_offset] = round_delay
 
         # Receive the information from clients
         cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
@@ -209,11 +208,11 @@ class BaselineCNNGatewayManager(GatewayManager):
         download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
         # Record the comp delay
-        self.comp_delay[sender_id - 1] = local_comp_delay
+        self.comp_delay[sender_id - self.client_offset] = local_comp_delay
 
         # Update information for client selection
-        self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - 1)
-        self.cs.update_grads(cnn_grads, local_sample_number, sender_id - 1)
+        self.cs.update_loss_n_delay(local_loss, round_delay, sender_id - self.client_offset)
+        self.cs.update_grads(cnn_grads, local_sample_number, sender_id - self.client_offset)
 
         logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
         self.log_delay()
@@ -223,7 +222,7 @@ class BaselineCNNGatewayManager(GatewayManager):
         self.aggregator.aggregate_async(cnn_params, local_sample_number, staleness)
 
         # Reset flag uploaded
-        self.flag_client_model_uploaded[sender_id - 1] = False
+        self.flag_client_model_uploaded[sender_id - self.client_offset] = False
 
         test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
                                                                              self.batch_selection)
@@ -247,17 +246,17 @@ class BaselineCNNGatewayManager(GatewayManager):
         select_ids = self.cs.select(self.select_num, self.flag_available)
         if select_ids.size > 0:
             for idx in select_ids:
-                self.send_message_sync_model_to_client(idx + 1,
+                self.send_message_sync_model_to_client(idx + self.client_offset,
                                                        self.round_idx)
 
     def send_message_sync_model_to_client(self, receive_id, client_index):
         receive_id = int(receive_id)
         logging.info("send_message_sync_model_to_client. " 
                      "receive_id = {} client_idx = {}".format(receive_id, client_index))
-        self.round_start_time[receive_id-1] = time.time()
+        self.round_start_time[receive_id - self.client_offset] = time.time()
 
         # Set available to False to prevent client selection
-        self.flag_available[receive_id - 1] = False
+        self.flag_available[receive_id - self.client_offset] = False
         
         global_model_params = self.aggregator.get_global_model_params()
 
@@ -292,7 +291,7 @@ class BaselineCNNGatewayManager(GatewayManager):
         select_ids = self.cs.select(self.select_num, self.flag_available)
         if select_ids.size > 0:
             for idx in select_ids:
-                self.send_message_sync_model_to_client(idx + 1,
+                self.send_message_sync_model_to_client(idx + self.client_offset,
                                                        self.round_idx)
 
     def send_model_to_server(self, receive_id):
@@ -302,7 +301,7 @@ class BaselineCNNGatewayManager(GatewayManager):
         # Build a dictionary and only report for the devices that
         # are connected to the current gateway and are available
         round_delay_dict, loss_dict, grads_dict, num_samples_dict = {}, {}, {}, {}
-        conn_ids = np.arange(self.n_clients, dtype=np.int32)[self.conn_clients]
+        conn_ids = np.arange(self.client_num, dtype=np.int32)[self.conn_clients]
         for idx in conn_ids:
             round_delay_dict[idx] = self.cs.est_delay[idx]
             loss_dict[idx] = self.cs.losses[idx]
