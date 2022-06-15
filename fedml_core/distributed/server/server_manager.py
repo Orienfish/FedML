@@ -17,6 +17,7 @@ class ServerManager(Observer):
         self.args = args
         self.client_num = args.client_num_in_total
         self.gateway_num = args.gateway_num_in_total
+        print('ServerManager, ', self.gateway_num)
         self.rank = rank
 
         self.backend = backend

@@ -46,7 +46,7 @@ class BaselineCNNServerManager(ServerManager):
         self.args = args
         self.aggregator = aggregator
         self.worker_num = args.client_num_in_total
-        self.select_num = args.client_num_per_round
+        self.select_num = args.client_num_per_gateway
         self.gateway_num = args.gateway_num_in_total
         self.round_num = args.comm_round
         self.round_delay_limit = args.round_delay_limit  # Only used in warmup

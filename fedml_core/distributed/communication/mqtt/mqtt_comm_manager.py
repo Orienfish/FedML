@@ -23,6 +23,7 @@ class MqttCommManager(BaseCommunicationManager):
             self._client_id = client_id
         self.client_num = client_num
         self.gateway_num = gateway_num
+        print('MqttCommManager', self.gateway_num)
         # Construct a Client
         self._client = mqtt.Client(client_id=str(self._client_id))
         self._client.on_connect = self._on_connect
@@ -53,8 +54,7 @@ class MqttCommManager(BaseCommunicationManager):
         """
         logging.info("_on_connect: Connection returned with result code: {}".format(str(rc)))
         # subscribe one topic
-        if self.client_id == 0:
-            # server
+        if self.client_id == 0:  # Server
             # subscribe to client
             for client_ID in range(1, self.client_num+1):
                 result, mid = self._client.subscribe(
@@ -63,14 +63,14 @@ class MqttCommManager(BaseCommunicationManager):
                 # print(result)
 
             # subscribe to gateway
-            for gateway_ID in range(100, self.gateway_num + 1):
+            print(self.gateway_num)
+            for gateway_ID in range(100, 100 + self.gateway_num):
                 result, mid = self._client.subscribe(
                     self._topic + str(gateway_ID) + '_' + str(0), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
 
-        elif self.client_id >= 100:
-            # gateway
+        elif self.client_id > 100:  # Gateway
             # subscribe to client
             for client_ID in range(1, self.client_num + 1):
                 result, mid = self._client.subscribe(
@@ -84,8 +84,7 @@ class MqttCommManager(BaseCommunicationManager):
             self._unacked_sub.append(mid)
             # print(result)
 
-        else:
-            # client
+        else:  # Client
             # subscribe to server
             result, mid = self._client.subscribe(
                 self._topic + str(0) + "_" + str(self.client_id), 0)
@@ -93,7 +92,7 @@ class MqttCommManager(BaseCommunicationManager):
             # print(result)
 
             # subscribe to gateway
-            for gateway_ID in range(100, self.gateway_num + 1):
+            for gateway_ID in range(100, 100 + self.gateway_num):
                 result, mid = self._client.subscribe(
                     self._topic + str(gateway_ID) + '_' + str(self.client_id), 0)
                 self._unacked_sub.append(mid)

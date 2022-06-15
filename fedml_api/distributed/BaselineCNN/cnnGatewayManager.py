@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../../FedML")))
 try:
     from FedML.fedml_core.distributed.communication.message import Message
-    from FedML.fedml_core.distributed.server.server_manager import GatewayManager
+    from FedML.fedml_core.distributed.gateway.gateway_manager import GatewayManager
 except ModuleNotFoundError: # except ImportError
     from fedml_core.distributed.communication.message import Message
     from fedml_core.distributed.server.server_manager import GatewayManager
@@ -41,7 +41,7 @@ class BaselineCNNGatewayManager(GatewayManager):
 
         # For client selection
         self.cs = ClientSelection(self.worker_num, args.selection,
-                                  self.round_num, args.cs_gamma,
+                                  self.gateway_round_num, args.cs_gamma,
                                   args.trial_name)
 
         # For results records
