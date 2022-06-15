@@ -39,6 +39,14 @@ class MyMessage(object):
     MSG_ARG_KEY_CLIENT_INDEX = "client_idx"
     MSG_ARG_KEY_DOWNLOAD_EPOCH = "download_epoch"
 
+    """for sync from and with server"""
+    MSG_ARG_KEY_NUM_SAMPLES_DICT = "num_samples_dict"
+    MSG_ARG_KEY_LOSS_DICT = "loss_dict"
+    MSG_ARG_KEY_MODEL_GRADS_DICT = "model_grads_dict"
+    MSG_ARG_KEY_ROUND_DELAY_DICT = "round_delay_dict"
+    MSG_ARG_KEY_CLIENT_AVAILABILITY = "client_available"
+    MSG_ARG_KEY_CLIENT_ASSOCIATION = "client_association"
+
     MSG_ARG_KEY_TRAIN_CORRECT = "train_correct"
     MSG_ARG_KEY_TRAIN_ERROR = "train_error"
     MSG_ARG_KEY_TRAIN_NUM = "train_num_sample"

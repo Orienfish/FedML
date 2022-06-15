@@ -68,13 +68,25 @@ class BaselineCNNServerManager(ServerManager):
         self.acc_log = os.path.join(args.result_dir, 'acc.txt')
         self.tb_logger = logger
 
-        self.flag_available = [True for _ in range(self.worker_num)]
+        # Indicator of which client is connected to the gateway
+        # The client-gateway association decision is made at the server,
+        # so this vector is updated by the server
+        self.conn_clients = np.array([False for _ in range(self.worker_num)],
+                                     dtype=np.bool)
+
+        # Indicator of the status of the clients
+        # Since the gateway can only know the status of the clients that is connected to it,
+        # this vector is periodically synced with the server
+        self.flag_available = np.array([True for _ in range(self.worker_num)],
+                                       dtype=np.bool)
+
         # Indicator of which client has uploaded in sync aggregation
         # This is related but different from the availability of the clients
         # If True, client has uploaded the model and finished last round, thus available
         # If False, the local round has not returned, thus unavailable
         # Formally, flag_available >= flag_client_model_uploaded
-        self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
+        self.flag_client_model_uploaded = np.array([False for _ in range(self.worker_num)],
+                                                   dtype=np.bool)
 
         # Start from warmup
         self.warmup_done = False

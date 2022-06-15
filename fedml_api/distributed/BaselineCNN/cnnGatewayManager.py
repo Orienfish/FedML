@@ -31,12 +31,13 @@ class BaselineCNNGatewayManager(GatewayManager):
         self.args = args
         self.aggregator = aggregator
         self.worker_num = args.client_num_in_total
-        self.select_num = args.client_num_per_round
-        self.round_num = args.comm_round
+        self.select_num = args.client_num_per_gateway
+        self.gateway_round_num = args.gateway_comm_round
         self.round_delay_limit = args.round_delay_limit
         self.round_idx = 0
         self.is_preprocessed = is_preprocessed
         self.batch_selection = batch_selection
+        self.rank = rank
 
         # For client selection
         self.cs = ClientSelection(self.worker_num, args.selection,
@@ -56,28 +57,25 @@ class BaselineCNNGatewayManager(GatewayManager):
         # Indicator of which client is connected to the gateway
         # The client-gateway association decision is made at the server,
         # so this vector is updated by the server
-        self.conn_clients = [False for _ in range(self.worker_num)]
+        self.conn_clients = np.array([False for _ in range(self.worker_num)],
+                                     dtype=np.bool)
 
         # Indicator of the status of the clients
         # Since the gateway can only know the status of the clients that is connected to it,
         # this vector is periodically synced with the server
-        self.flag_available = [True for _ in range(self.worker_num)]
+        self.flag_available = np.array([True for _ in range(self.worker_num)],
+                                       dtype=np.bool)
 
         # Indicator of which client has uploaded in sync aggregation
         # This is related but different from the availability of the clients
         # If True, client has uploaded the model and finished last round, thus available
         # If False, the local round has not returned, thus unavailable
         # Formally, flag_available >= flag_client_model_uploaded
-        self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
-
-        # Start from warmup
-        self.warmup_done = False
+        self.flag_client_model_uploaded = np.array([False for _ in range(self.worker_num)],
+                                                   dtype=np.bool)
 
     def run(self):
         super().run()
-        # Create a thread to monitor running status and kill the program at the end
-        x = threading.Thread(target=terminate)
-        x.start()
 
     def send_init_msg(self):
         global_model_params = self.aggregator.get_global_model_params()
@@ -85,10 +83,8 @@ class BaselineCNNGatewayManager(GatewayManager):
             self.send_message_init_to_client(receiver_id, global_model_params, 0)
 
     def register_message_receive_handlers(self):
-        self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_INIT_REGISTER,
-                                              self.handle_init_register_from_client)
-        self.warmup_thread = threading.Thread(target=self.warmup_checker)
-        self.warmup_thread.start()
+        self.register_message_receive_handler(MyMessage.MSG_TYPE_S2G_SYNC_MODEL_TO_GATEWAY,
+                                              self.handle_message_receive_model_from_server)
 
         if self.args.method == 'fedavg':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2G_SEND_MODEL_TO_GATEWAY,
@@ -134,7 +130,6 @@ class BaselineCNNGatewayManager(GatewayManager):
 
         self.log_delay()
 
-
     def sync_aggregate_trigger(self):
         # A threaded process that periodically checks whether the sync aggregation
         # can be triggered
@@ -159,51 +154,13 @@ class BaselineCNNGatewayManager(GatewayManager):
                 # Reset uploaded flag
                 self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
 
-    def warmup_checker(self):
-        # A threaded process that periodically checks whether the warmup is done
-        while True:
-            time.sleep(20)
-            uploaded_num = sum(self.flag_client_model_uploaded)
-            not_returned = ~np.array(self.flag_available)
-            waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
-            if np.sum(not_returned) > 0:
-                logging.info('not returned: {}'.format(not_returned))
-                logging.info('warmup waiting time: {}'.format(waiting_time_since_start))
-                min_waiting_time = np.min(waiting_time_since_start)
-            else:
-                min_waiting_time = 0.0
-
-            if uploaded_num >= self.worker_num or \
-                    (uploaded_num > 0 and min_waiting_time >= self.round_delay_limit):
-                # All received or exceed time limit
-                # Start the first round from client selection
-                select_ids = self.cs.select(self.select_num, self.flag_available)
-                if select_ids.size > 0:
-                    for idx in select_ids:
-                        self.send_message_sync_model_to_client(idx + 1,
-                                                               self.round_idx)
-
-                break  # End the thread
-
-        # Reset uploaded flag
-        self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
-
-        self.warmup_done = True
-        logging.info('All received. Warmup done.')
-        logging.info('Start the experiment!')
-
-        # Create a thread to trigger sync aggregation
-        if self.args.method == 'fedavg':
-            self.sync_agg = threading.Thread(target=self.sync_aggregate_trigger)
-            self.sync_agg.start()
-
     def sync_aggregate(self):
         # Sync aggregation
         global_model_params = self.aggregator.aggregate(self.flag_client_model_uploaded)
 
         # Test
         test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
-                                                                  self.batch_selection)
+                                                                             self.batch_selection)
         cur_time = time.time() - self.start_time
         logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
                                                             cur_time,
@@ -211,26 +168,23 @@ class BaselineCNNGatewayManager(GatewayManager):
         logging.info('#########################################\n')
 
         # Tensoboard logger
-        self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
-        self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
+        self.tb_logger.log_value('gw{}_test_loss'.format(self.rank), test_loss, int(cur_time * 1000))
+        self.tb_logger.log_value('gw{}_accuracy'.format(self.rank), accuracy, int(cur_time * 1000))
 
         # Delay and accuracy logger
         self.log(cur_time, test_loss, accuracy)
 
         # start the next round
         self.round_idx += 1
-        if self.round_idx == self.round_num or accuracy >= self.args.target_accuracy:
-            for receiver_id in range(1, self.size):
-                self.send_message_finish_to_client(receiver_id)
-            global running
-            running = False
-        else:
-            # Client selection
-            select_ids = self.cs.select(self.select_num, self.flag_available)
-            if select_ids.size > 0:
-                for idx in select_ids:
-                    self.send_message_sync_model_to_client(idx + 1,
-                                                           self.round_idx)
+        if self.round_idx % self.gateway_comm_num == 0:
+            self.send_model_to_server(0)
+
+        # Client selection for the next gateway round
+        select_ids = self.cs.select(self.select_num, self.flag_available)
+        if select_ids.size > 0:
+            for idx in select_ids:
+                self.send_message_sync_model_to_client(idx + 1,
+                                                       self.round_idx)
 
     def handle_message_receive_model_from_client_async(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -264,66 +218,37 @@ class BaselineCNNGatewayManager(GatewayManager):
         logging.info('flag uploaded: {}'.format(self.flag_client_model_uploaded))
         self.log_delay()
 
-        if self.warmup_done:
-            self.round_idx += 1
-            staleness = self.round_idx - download_epoch
-            self.aggregator.aggregate_async(cnn_params, local_sample_number, staleness)
+        self.round_idx += 1
+        staleness = self.round_idx - download_epoch
+        self.aggregator.aggregate_async(cnn_params, local_sample_number, staleness)
 
-            # Reset flag uploaded
-            self.flag_client_model_uploaded[sender_id - 1] = False
+        # Reset flag uploaded
+        self.flag_client_model_uploaded[sender_id - 1] = False
 
-            test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
-                                                                                 self.batch_selection)
-            cur_time = time.time() - self.start_time
-            logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
-                                                                cur_time,
-                                                                accuracy))
-            logging.info('#########################################\n')
+        test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
+                                                                             self.batch_selection)
+        cur_time = time.time() - self.start_time
+        logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
+                                                            cur_time,
+                                                            accuracy))
+        logging.info('#########################################\n')
 
-            # Tensoboard logger
-            self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
-            self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
+        # Tensoboard logger
+        self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
+        self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
 
-            # Delay and accuracy logger
-            self.log(cur_time, test_loss, accuracy)
+        # Delay and accuracy logger
+        self.log(cur_time, test_loss, accuracy)
 
-            if self.round_idx >= self.round_num or accuracy >= self.args.target_accuracy:
-                for receiver_id in range(1, self.size):
-                    self.send_message_finish_to_client(receiver_id)
-                global running
-                running = False
-            else:
-                # Client selection
-                select_ids = self.cs.select(1, self.flag_available)
-                if select_ids.size > 0:
-                    for idx in select_ids:
-                        self.send_message_sync_model_to_client(idx + 1,
-                                                               self.round_idx)
+        if self.round_idx % self.gateway_round_num == 0:
+            self.send_model_to_server(0)
 
-    def handle_init_register_from_client(self, msg_params):
-        sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
-        logging.info("handle_init_register_from_client "
-                     "sender_id = {}".format(sender_id))
-
-        # Sync the same initial global model with the client
-        global_model_params = self.aggregator.get_global_model_params()
-        self.send_message_init_to_client(sender_id, global_model_params, 0)
-
-    def send_message_init_to_client(self, receive_id, global_model_params, client_index):
-        logging.info("send_message_init_to_client. "
-                     "receive_id = {} client_idx = {}".format(receive_id, client_index))
-        self.round_start_time[receive_id - 1] = time.time()
-
-        # Set available to False to prevent client selection
-        self.flag_available[receive_id - 1] = False
-
-        global_model_params = transform_tensor_to_list(global_model_params)
-
-        message = Message(MyMessage.MSG_TYPE_S2C_INIT_CONFIG, self.get_sender_id(), receive_id)
-        message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, global_model_params)
-        message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_INDEX, str(client_index))
-        message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.round_idx)
-        self.send_message(message)
+        # Client selection for the next gateway round
+        select_ids = self.cs.select(1, self.flag_available)
+        if select_ids.size > 0:
+            for idx in select_ids:
+                self.send_message_sync_model_to_client(idx + 1,
+                                                       self.round_idx)
 
     def send_message_sync_model_to_client(self, receive_id, client_index):
         receive_id = int(receive_id)
@@ -344,11 +269,48 @@ class BaselineCNNGatewayManager(GatewayManager):
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.round_idx)
         self.send_message(message)
 
-    def send_message_finish_to_client(self, receive_id):
-        logging.info("send_message_finish_to_client. "
-                     "receive_id = {}".format(receive_id))
+    def handle_message_receive_model_from_server(self, msg_params):
+        logging.info("handle_message_receive_model_from_server.")
+        global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
+        global_cnn_params = transform_list_to_tensor(global_cnn_params)
+        self.aggregator.set_global_model_params(global_cnn_params)
 
-        message = Message(MyMessage.MSG_TYPE_S2C_FINISH, self.get_sender_id(), receive_id)
+        self.flag_available = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_AVAILABILITY)
+        self.conn_clients = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_ASSOCIATION)
+        self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
+
+        round_delay_dict = msg_params.get(MyMessage.MSG_ARG_KEY_ROUND_DELAY_DICT)
+        loss_dict = msg_params.get(MyMessage.MSG_ARG_KEY_LOSS_DICT)
+        grads_dict = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_GRADS_DICT)
+        num_samples_dict = msg_params.get(MyMessage.MSG_ARG_KEY_NUM_SAMPLES_DICT)
+
+        for k in round_delay_dict.keys():
+            self.cs.update_loss_n_delay(loss_dict[k], round_delay_dict[k], k)
+            self.cs.update_grads(grads_dict[k], num_samples_dict[k], k)
+
+
+    def send_model_to_server(self, receive_id):
+        global_model_params = self.aggregator.get_global_model_params()
+        global_model_params = transform_tensor_to_list(global_model_params)
+
+        # Build a dictionary and only report for the devices that
+        # are connected to the current gateway and are available
+        round_delay_dict, loss_dict, grads_dict, num_samples_dict = {}, {}, {}, {}
+        conn_n_available = self.conn_clients & self.flag_available
+        available_ids = np.arange(self.n_clients, dtype=np.int32)[conn_n_available]
+        for idx in available_ids:
+            round_delay_dict[idx] = self.cs.est_delay[idx]
+            loss_dict[idx] = self.cs.losses[idx]
+            grads_dict[idx] = self.cs.grads[idx]
+            num_samples_dict[idx] = self.cs.num_samples[idx]
+
+        message = Message(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER, self.get_sender_id(), receive_id)
+        message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, global_model_params)
+        message.add_params(MyMessage.MSG_ARG_KEY_MODEL_GRADS_DICT, grads_dict)
+        message.add_params(MyMessage.MSG_ARG_KEY_NUM_SAMPLES_DICT, num_samples_dict)
+        message.add_params(MyMessage.MSG_ARG_KEY_LOSS_DICT, loss_dict)
+        message.add_params(MyMessage.MSG_ARG_KEY_ROUND_DELAY_DICT, round_delay_dict)
+        message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.download_epoch)
         self.send_message(message)
 
     def log_delay(self):

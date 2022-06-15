@@ -58,7 +58,7 @@ class GatewayManager(Observer):
         self.message_handler_dict[msg_type] = handler_callback_func
 
     def finish(self):
-        logging.info("__finish client")
+        logging.info("__finish gateway")
         # if self.backend == "MPI":
         #    MPI.COMM_WORLD.Abort()
 
