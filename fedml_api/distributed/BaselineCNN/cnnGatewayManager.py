@@ -49,8 +49,8 @@ class BaselineCNNGatewayManager(GatewayManager):
         self.round_start_time = [0.0 for _ in range(self.worker_num)]
         self.round_delay = [0.0 for _ in range(self.worker_num)]
         self.comp_delay = [0.0 for _ in range(self.worker_num)]
-        #self.round_delay_log = os.path.join(args.result_dir, 'round_delay.txt')
-        #self.comp_delay_log = os.path.join(args.result_dir, 'comp_delay.txt')
+        self.round_delay_log = os.path.join(args.result_dir, 'gw{}_round_delay.txt'.format(rank))
+        self.comp_delay_log = os.path.join(args.result_dir, 'gw{}_comp_delay.txt'.format(rank))
         self.acc_log = os.path.join(args.result_dir, 'gw{}_acc.txt'.format(rank))
         self.tb_logger = logger
 
@@ -234,8 +234,8 @@ class BaselineCNNGatewayManager(GatewayManager):
         logging.info('#########################################\n')
 
         # Tensoboard logger
-        self.tb_logger.log_value('test_loss', test_loss, int(cur_time * 1000))
-        self.tb_logger.log_value('accuracy', accuracy, int(cur_time * 1000))
+        self.tb_logger.log_value('gw{}_test_loss'.format(self.rank), test_loss, int(cur_time * 1000))
+        self.tb_logger.log_value('gw{}_accuracy'.format(self.rank), accuracy, int(cur_time * 1000))
 
         # Delay and accuracy logger
         self.log(cur_time, test_loss, accuracy)
@@ -244,7 +244,7 @@ class BaselineCNNGatewayManager(GatewayManager):
             self.send_model_to_server(0)
 
         # Client selection for the next gateway round
-        select_ids = self.cs.select(1, self.flag_available)
+        select_ids = self.cs.select(self.select_num, self.flag_available)
         if select_ids.size > 0:
             for idx in select_ids:
                 self.send_message_sync_model_to_client(idx + 1,
@@ -275,7 +275,7 @@ class BaselineCNNGatewayManager(GatewayManager):
         global_cnn_params = transform_list_to_tensor(global_cnn_params)
         self.aggregator.set_global_model_params(global_cnn_params)
 
-        self.flag_available = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_AVAILABILITY)
+        # self.flag_available = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_AVAILABILITY)
         self.conn_clients = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_ASSOCIATION)
         self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
@@ -288,6 +288,12 @@ class BaselineCNNGatewayManager(GatewayManager):
             self.cs.update_loss_n_delay(loss_dict[k], round_delay_dict[k], k)
             self.cs.update_grads(grads_dict[k], num_samples_dict[k], k)
 
+        # Client selection for the next gateway round
+        select_ids = self.cs.select(self.select_num, self.flag_available)
+        if select_ids.size > 0:
+            for idx in select_ids:
+                self.send_message_sync_model_to_client(idx + 1,
+                                                       self.round_idx)
 
     def send_model_to_server(self, receive_id):
         global_model_params = self.aggregator.get_global_model_params()
@@ -296,9 +302,8 @@ class BaselineCNNGatewayManager(GatewayManager):
         # Build a dictionary and only report for the devices that
         # are connected to the current gateway and are available
         round_delay_dict, loss_dict, grads_dict, num_samples_dict = {}, {}, {}, {}
-        conn_n_available = self.conn_clients & self.flag_available
-        available_ids = np.arange(self.n_clients, dtype=np.int32)[conn_n_available]
-        for idx in available_ids:
+        conn_ids = np.arange(self.n_clients, dtype=np.int32)[self.conn_clients]
+        for idx in conn_ids:
             round_delay_dict[idx] = self.cs.est_delay[idx]
             loss_dict[idx] = self.cs.losses[idx]
             grads_dict[idx] = self.cs.grads[idx]

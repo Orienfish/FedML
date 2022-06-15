@@ -44,7 +44,7 @@ class MyMessage(object):
     MSG_ARG_KEY_LOSS_DICT = "loss_dict"
     MSG_ARG_KEY_MODEL_GRADS_DICT = "model_grads_dict"
     MSG_ARG_KEY_ROUND_DELAY_DICT = "round_delay_dict"
-    MSG_ARG_KEY_CLIENT_AVAILABILITY = "client_available"
+    # MSG_ARG_KEY_CLIENT_AVAILABILITY = "client_available"
     MSG_ARG_KEY_CLIENT_ASSOCIATION = "client_association"
 
     MSG_ARG_KEY_TRAIN_CORRECT = "train_correct"

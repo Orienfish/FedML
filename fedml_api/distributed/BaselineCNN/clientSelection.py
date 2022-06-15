@@ -35,21 +35,13 @@ class ClientSelection(object):
 
         self.log_file = 'logcs_{}'.format(trial_name)
 
-    def update_loss_n_delay(self, losses, delays, client_id='all'):
-        # if client_id = 'all', losses: numpy array of losses on all clients, (n,)
-        #                       delays: numpy array of delays on all clients, (n,)
+    def update_loss_n_delay(self, losses, delays, client_id):
         # if client_id = int, losses: int of loss on client #client_id
         #                     num_samples: int of num_samples on client #client_id
-        if client_id == 'all':  # First-time update
-            self.losses = losses
-            self.est_delay = (self.est_delay * self.est_delay_sample_num +
-                              delays) / (self.est_delay_sample_num + 1)
-            self.est_delay_sample_num += 1
-        else:  # Update on client #client_id
-            self.losses[client_id] = losses
-            self.est_delay[client_id] = (self.est_delay[client_id] * self.est_delay_sample_num[client_id] +
-                                         delays) / (self.est_delay_sample_num[client_id] + 1)
-            self.est_delay_sample_num[client_id] += 1
+        self.losses[client_id] = losses
+        self.est_delay[client_id] = (self.est_delay[client_id] * self.est_delay_sample_num[client_id] +
+                                     delays) / (self.est_delay_sample_num[client_id] + 1)
+        self.est_delay_sample_num[client_id] += 1
 
     def update_grads(self, grads, num_samples, client_id):
         # if client_id = int, grads: numpy array of grads on client #client_id, (n,)
@@ -164,7 +156,7 @@ class ClientSelection(object):
 
         # Only select the number of clients to make unavailable (not returned)
         # clients to be select_num
-        # select_num = select_num - np.sum(~available)
+        select_num = select_num - np.sum(~available)
 
         logging.info('Available clients: {}'.format(available))
 
