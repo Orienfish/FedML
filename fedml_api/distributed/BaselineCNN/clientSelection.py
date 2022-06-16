@@ -149,23 +149,23 @@ class ClientSelection(object):
             print("Tier " + str(tier) + " : " + str(self.tiers[tier].p))
             i = i + 1
 
-    def select(self, select_num, flag_available):
-        available = np.array(flag_available)
-        available_ids = np.arange(self.n_clients, dtype=np.int32)[available]
+    def select(self, select_num, flag_available, flag_conn):
+        available_ids = np.arange(self.n_clients, dtype=np.int32)[flag_available & flag_conn]
         selected = np.array([False for _ in range(self.n_clients)])
 
         # Only select the number of clients to make unavailable (not returned)
         # clients to be select_num
-        select_num = select_num - np.sum(~available)
+        select_num = select_num - np.sum(~flag_available)
 
-        logging.info('Available clients: {}'.format(available))
+        logging.info('Available clients: {}'.format(flag_available))
+        logging.info('Connected clients: {}'.format(flag_conn))
 
         if self.select_type == 'divfl':
             sample_clients_ids = []
 
             # selected/not_selected: used in divFL, a numpy array of [True or False]
             # indicating whether each client is already selected
-            not_selected = available & ~selected
+            not_selected = flag_available & flag_conn & ~selected
             while np.sum(selected) < select_num and np.sum(not_selected) > 0:
                 # Repeat until select the required number or there is no device to select
 
@@ -195,7 +195,7 @@ class ClientSelection(object):
                 # Update client availability status
                 selected[select_client_id] = True
                 sample_clients_ids.append(select_client_id)
-                not_selected = available & ~selected
+                not_selected = flag_available & flag_conn & ~selected
 
         else:  # first sort all candidates according to certain rules
             if self.select_type == 'random':
@@ -230,7 +230,7 @@ class ClientSelection(object):
 
             elif self.select_type == 'coreset':
                 # Get the non-negative losses and delays
-                if np.sum(available) > 1:
+                if np.sum(flag_available & flag_conn) > 1:
                     mean, var = np.mean(self.est_delay), np.std(self.est_delay)
                     delays = (self.est_delay - mean) / var
 
@@ -252,7 +252,7 @@ class ClientSelection(object):
                     logging.info('delays: {}'.format([self.gamma * delays[i] for i in candidates_ids]))
 
                     with open(self.log_file, 'a') as f:
-                        f.write('Available clients: {}\n'.format(available))
+                        f.write('Available clients: {}\n'.format(flag_available))
                         f.write('loss: {}\n'.format(self.losses))
                         f.write('eta: {}\n'.format(eta))
                         f.write('v: {}\n'.format(v))

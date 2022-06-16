@@ -63,7 +63,7 @@ class GatewayManager(Observer):
         #    MPI.COMM_WORLD.Abort()
 
         try:
-            for line in os.popen('ps aux | grep fedcnn_rpi_client.py | grep -v grep'):
+            for line in os.popen('ps aux | grep app_CNN_gateway.py | grep -v grep'):
                 fields = line.split()
                 pid = fields[1]
                 print('extracted pid: ', pid)

@@ -151,7 +151,7 @@ class ClientAssociation(object):
         with open(self.log_file, 'a') as f:
             f.write('Obj 1: {}\n'.format(self.u @ conn))
             f.write('Obj 2: {}\n'.format(self.R @ conn))
-            for j in range(self.n_clients):
+            for j in range(self.n_gateways):
                 f.write('Gw {}: {} clients\n'.format(
                     j, np.sum(conn[:, j])
                 ))

@@ -82,10 +82,14 @@ class BaselineCNNGatewayManager(GatewayManager):
     def register_message_receive_handlers(self):
         self.register_message_receive_handler(MyMessage.MSG_TYPE_S2G_SYNC_MODEL_TO_GATEWAY,
                                               self.handle_message_receive_model_from_server)
+        self.register_message_receive_handler(MyMessage.MSG_TYPE_S2C_FINISH,
+                                              self.handle_message_finish_from_server)
 
         if self.args.method == 'fedavg':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2G_SEND_MODEL_TO_GATEWAY,
                                                   self.handle_message_receive_model_from_client_sync)
+            self.sync_thread = threading.Thread(target=self.sync_aggregate_trigger)
+            self.sync_thread.start()
 
         elif self.args.method == 'fedasync':
             self.register_message_receive_handler(MyMessage.MSG_TYPE_C2G_SEND_MODEL_TO_GATEWAY,
@@ -133,7 +137,7 @@ class BaselineCNNGatewayManager(GatewayManager):
         # A threaded process that periodically checks whether the sync aggregation
         # can be triggered
         while True:
-            time.sleep(20)
+            time.sleep(10)
             uploaded_num = sum(self.flag_client_model_uploaded)
             not_returned = ~np.array(self.flag_available)
             waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
@@ -179,7 +183,8 @@ class BaselineCNNGatewayManager(GatewayManager):
             self.send_model_to_server(0)
 
         # Client selection for the next gateway round
-        select_ids = self.cs.select(self.select_num, self.flag_available)
+        select_ids = self.cs.select(self.select_num, self.flag_available,
+                                    self.conn_clients)
         if select_ids.size > 0:
             for idx in select_ids:
                 self.send_message_sync_model_to_client(idx + self.client_offset,
@@ -243,7 +248,8 @@ class BaselineCNNGatewayManager(GatewayManager):
             self.send_model_to_server(0)
 
         # Client selection for the next gateway round
-        select_ids = self.cs.select(self.select_num, self.flag_available)
+        select_ids = self.cs.select(self.select_num, self.flag_available,
+                                    self.conn_clients)
         if select_ids.size > 0:
             for idx in select_ids:
                 self.send_message_sync_model_to_client(idx + self.client_offset,
@@ -262,20 +268,24 @@ class BaselineCNNGatewayManager(GatewayManager):
 
         global_model_params = transform_tensor_to_list(global_model_params)
 
-        message = Message(MyMessage.MSG_TYPE_S2C_SYNC_MODEL_TO_CLIENT, self.get_sender_id(), receive_id)
+        message = Message(MyMessage.MSG_TYPE_G2C_SYNC_MODEL_TO_CLIENT, self.get_sender_id(), receive_id)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, global_model_params)
         message.add_params(MyMessage.MSG_ARG_KEY_CLIENT_INDEX, str(client_index))
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.round_idx)
         self.send_message(message)
 
     def handle_message_receive_model_from_server(self, msg_params):
+        logging.info('*****************************************')
         logging.info("handle_message_receive_model_from_server.")
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         global_cnn_params = transform_list_to_tensor(global_cnn_params)
         self.aggregator.set_global_model_params(global_cnn_params)
 
         # self.flag_available = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_AVAILABILITY)
-        self.conn_clients = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_ASSOCIATION)
+        conn_ids = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_ASSOCIATION)
+        self.conn_clients = np.array([False for _ in range(self.worker_num)],
+                                     dtype=np.bool)
+        self.conn_clients[conn_ids] = True
         self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
 
         round_delay_dict = msg_params.get(MyMessage.MSG_ARG_KEY_ROUND_DELAY_DICT)
@@ -283,18 +293,29 @@ class BaselineCNNGatewayManager(GatewayManager):
         grads_dict = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_GRADS_DICT)
         num_samples_dict = msg_params.get(MyMessage.MSG_ARG_KEY_NUM_SAMPLES_DICT)
 
+        logging.info('conn ids: {}'.format(conn_ids))
+        logging.info('loss dict: {}'.format(loss_dict))
+        logging.info('grads dict {}'.format([grad[:2] for grad in grads_dict.values()]))
+        logging.info('round delay dict: {}'.format(round_delay_dict))
+        logging.info('*****************************************\n')
+
         for k in round_delay_dict.keys():
-            self.cs.update_loss_n_delay(loss_dict[k], round_delay_dict[k], k)
-            self.cs.update_grads(grads_dict[k], num_samples_dict[k], k)
+            logging.info('update client {}'.format(k))
+            self.cs.update_loss_n_delay(loss_dict[k], round_delay_dict[k], int(k))
+            self.cs.update_grads(grads_dict[k], num_samples_dict[k], int(k))
 
         # Client selection for the next gateway round
-        select_ids = self.cs.select(self.select_num, self.flag_available)
+        select_ids = self.cs.select(self.select_num, self.flag_available,
+                                    self.conn_clients)
         if select_ids.size > 0:
             for idx in select_ids:
                 self.send_message_sync_model_to_client(idx + self.client_offset,
                                                        self.round_idx)
 
     def send_model_to_server(self, receive_id):
+        logging.info('*****************************************')
+        logging.info('send model to server!')
+        receive_id = int(receive_id)
         global_model_params = self.aggregator.get_global_model_params()
         global_model_params = transform_tensor_to_list(global_model_params)
 
@@ -302,13 +323,22 @@ class BaselineCNNGatewayManager(GatewayManager):
         # are connected to the current gateway and are available
         round_delay_dict, loss_dict, grads_dict, num_samples_dict = {}, {}, {}, {}
         conn_ids = np.arange(self.client_num, dtype=np.int32)[self.conn_clients]
+        conn_ids = [int(idx) for idx in list(conn_ids)]
+
+        logging.info('conn ids: {}'.format(conn_ids))
+
         for idx in conn_ids:
             round_delay_dict[idx] = self.cs.est_delay[idx]
             loss_dict[idx] = self.cs.losses[idx]
-            grads_dict[idx] = self.cs.grads[idx]
-            num_samples_dict[idx] = self.cs.num_samples[idx]
+            grads_dict[idx] = list(self.cs.grads[idx])
+            num_samples_dict[idx] = int(self.cs.num_samples[idx])
 
-        message = Message(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER, self.get_sender_id(), receive_id)
+        logging.info('loss dict: {}'.format(loss_dict))
+        logging.info('grads dict {}'.format([grad[:2] for grad in grads_dict.values()]))
+        logging.info('round delay dict: {}'.format(round_delay_dict))
+        logging.info('*****************************************\n')
+
+        message = Message(MyMessage.MSG_TYPE_G2S_SEND_MODEL_TO_SERVER, self.get_sender_id(), receive_id)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, global_model_params)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_GRADS_DICT, grads_dict)
         message.add_params(MyMessage.MSG_ARG_KEY_NUM_SAMPLES_DICT, num_samples_dict)
@@ -316,6 +346,10 @@ class BaselineCNNGatewayManager(GatewayManager):
         message.add_params(MyMessage.MSG_ARG_KEY_ROUND_DELAY_DICT, round_delay_dict)
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.download_epoch)
         self.send_message(message)
+
+    def handle_message_finish_from_server(self, msg_params):
+        logging.info("handle_message_finish from server.")
+        self.finish()
 
     def log_delay(self):
         # Log the round and comp delays in the latest round
