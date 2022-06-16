@@ -50,14 +50,7 @@ class ClientManager(Observer):
         handler_callback_func(msg_params)
 
     def send_message(self, message, qos=0):
-        msg = Message()
-        msg.add(Message.MSG_ARG_KEY_TYPE, message.get_type())
-        msg.add(Message.MSG_ARG_KEY_SENDER, message.get_sender_id())
-        msg.add(Message.MSG_ARG_KEY_RECEIVER, message.get_receiver_id())
-        for key, value in message.get_params().items():
-            # logging.info("%s == %s" % (key, value))
-            msg.add(key, value)
-        self.com_manager.send_message(msg, qos=qos)
+        self.com_manager.send_message(message, qos=qos)
 
     @abstractmethod
     def register_message_receive_handlers(self) -> None:
