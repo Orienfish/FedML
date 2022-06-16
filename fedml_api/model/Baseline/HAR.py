@@ -6,6 +6,9 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 import copy
 
+FEATURE_DIM = 561
+NUM_CLASSES = 6
+
 class HAR_Net(nn.Module):
     def __init__(self):
         super(HAR_Net, self).__init__()

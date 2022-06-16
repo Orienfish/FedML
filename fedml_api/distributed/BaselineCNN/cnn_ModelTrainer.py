@@ -23,6 +23,7 @@ class MyModelTrainer(ModelTrainer):
 
     # trainer init
     def init_trainer(self,args):
+        model = self.classifier
         if args.dataset == "mnist":
             print("Train MNIST")
             self.optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)

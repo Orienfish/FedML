@@ -69,7 +69,7 @@ class Bottleneck(nn.Module):
 
 class CIFAR10_Net(nn.Module):
     def __init__(self, block=BasicBlock, num_blocks=[2,2,2,2], num_classes=10):
-        super(CIFAR10_NET, self).__init__()
+        super(CIFAR10_Net, self).__init__()
         self.in_planes = 64
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3,

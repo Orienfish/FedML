@@ -6,6 +6,13 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 import copy
 
+
+SEQ_LEN = 24
+NUM_INPUT = 12  # input_size, corresponds to the number of features in the input
+NUM_OUTPUT = 12  # output_size, the number of items in the output
+NUM_HIDDEN = 128
+NUM_LAYERS = 1
+
 class HPWREN_Net(nn.Module):
 
     def __init__(self):
