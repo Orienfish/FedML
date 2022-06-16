@@ -36,30 +36,27 @@ class myMqttCommManager(MqttCommManager):
             sending message topic (publish): senderID_receiverID
             receiving message topic (subscribe): receiverID_sender
         """
-        logging.info(
-            "_on_connect: Connection returned with result code: {}".format(
-                str(rc)))
+        logging.info("_on_connect: Connection returned with result code: {}".format(str(rc)))
+        logging.info("client ID: {}".format(self.client_id))
         # subscribe one topic
-        if self.client_id == 0:
-            # server
+        if self.client_id == 0:  # Server
             # subscribe to client
-            for client_ID in range(1, self.client_num + 1):
+            for client_ID in range(self.gateway_num + 1, self.gateway_num + 1 + self.client_num):
                 result, mid = self._client.subscribe(
                     self._topic + str(client_ID) + '_' + str(0), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
 
             # subscribe to gateway
-            for gateway_ID in range(100, self.gateway_num + 1):
+            for gateway_ID in range(1, self.gateway_num + 1):
                 result, mid = self._client.subscribe(
                     self._topic + str(gateway_ID) + '_' + str(0), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
 
-        elif self.client_id >= 100:
-            # gateway
+        elif 0 < self.client_id <= self.gateway_num:  # Gateway
             # subscribe to client
-            for client_ID in range(1, self.client_num + 1):
+            for client_ID in range(self.gateway_num + 1, self.gateway_num + 1 + self.client_num):
                 result, mid = self._client.subscribe(
                     self._topic + str(client_ID) + '_' + str(self.client_id), 0)
                 self._unacked_sub.append(mid)
@@ -71,8 +68,7 @@ class myMqttCommManager(MqttCommManager):
             self._unacked_sub.append(mid)
             # print(result)
 
-        else:
-            # client
+        else:  # Client
             # subscribe to server
             result, mid = self._client.subscribe(
                 self._topic + str(0) + "_" + str(self.client_id), 0)
@@ -80,10 +76,9 @@ class myMqttCommManager(MqttCommManager):
             # print(result)
 
             # subscribe to gateway
-            for gateway_ID in range(100, self.gateway_num + 1):
+            for gateway_ID in range(1, self.gateway_num + 1):
                 result, mid = self._client.subscribe(
-                    self._topic + str(gateway_ID) + '_' + str(self.client_id),
-                    0)
+                    self._topic + str(gateway_ID) + '_' + str(self.client_id), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
 
@@ -132,6 +127,7 @@ class BaseCNNClientManager(ClientManager):
     def handle_message_init_from_server(self, msg_params):
         logging.info("handle_message_init_from_server.")
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
+        logging.info("sender_id: {}".format(sender_id))
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
         self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
@@ -145,6 +141,7 @@ class BaseCNNClientManager(ClientManager):
     def handle_message_receive_model_from_gateway(self, msg_params):
         logging.info("handle_message_receive_model_from_gateway.")
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
+        logging.info("sender_id: {}".format(sender_id))
         global_cnn_params = msg_params.get(MyMessage.MSG_ARG_KEY_MODEL_PARAMS)
         client_index = msg_params.get(MyMessage.MSG_ARG_KEY_CLIENT_INDEX)
         self.download_epoch = msg_params.get(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH)
@@ -166,12 +163,16 @@ class BaseCNNClientManager(ClientManager):
                           self.get_sender_id(), 0)
         self.send_message(message)
 
-    def send_model_to_server(self, receive_id, cnn_params, cnn_grads, local_sample_num,
-                             local_loss, local_comp_delay):
-        
+    def send_updated_model(self, receive_id, cnn_params, cnn_grads, local_sample_num,
+                           local_loss, local_comp_delay):
+        # logging.info('send_model receive_id: {}'.format(receive_id))
         cnn_params = transform_tensor_to_list(cnn_params)
 
-        message = Message(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER, self.get_sender_id(), receive_id)
+        if receive_id == 0:  # Send model to server
+            message = Message(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER, self.get_sender_id(), receive_id)
+        else:  # Send model to gateway
+            message = Message(MyMessage.MSG_TYPE_C2G_SEND_MODEL_TO_GATEWAY, self.get_sender_id(), receive_id)
+
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_PARAMS, cnn_params)
         message.add_params(MyMessage.MSG_ARG_KEY_MODEL_GRADS, cnn_grads)
         message.add_params(MyMessage.MSG_ARG_KEY_NUM_SAMPLES, local_sample_num)
@@ -180,11 +181,12 @@ class BaseCNNClientManager(ClientManager):
         message.add_params(MyMessage.MSG_ARG_KEY_DOWNLOAD_EPOCH, self.download_epoch)
         self.send_message(message)
 
-
     def __train(self, receive_id):
         logging.info("#######training########### round_id = %d" % self.round_idx)
         start = time.time()
         cnn_params, cnn_grads, local_sample_num, local_loss = self.trainer.train()
         local_comp_delay = time.time() - start
-        self.send_model_to_server(receive_id, cnn_params, cnn_grads, local_sample_num,
-                                  local_loss, local_comp_delay)
+        # logging.info('__train receive_id: {}'.format(receive_id))
+
+        self.send_updated_model(receive_id, cnn_params, cnn_grads, local_sample_num,
+                                local_loss, local_comp_delay)

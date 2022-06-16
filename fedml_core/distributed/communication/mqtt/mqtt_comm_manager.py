@@ -57,22 +57,22 @@ class MqttCommManager(BaseCommunicationManager):
         # subscribe one topic
         if self.client_id == 0:  # Server
             # subscribe to client
-            for client_ID in range(self.gateway_num+1, self.gateway_num+1+self.client_num):
+            for client_ID in range(self.gateway_num + 1, self.gateway_num + 1 + self.client_num):
                 result, mid = self._client.subscribe(
                     self._topic + str(client_ID) + '_' + str(0), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
 
             # subscribe to gateway
-            for gateway_ID in range(1, self.gateway_num+1):
+            for gateway_ID in range(1, self.gateway_num + 1):
                 result, mid = self._client.subscribe(
                     self._topic + str(gateway_ID) + '_' + str(0), 0)
                 self._unacked_sub.append(mid)
                 # print(result)
 
-        elif self.client_id > 0 and self.client_id <= self.gateway_num:  # Gateway
+        elif 0 < self.client_id <= self.gateway_num:  # Gateway
             # subscribe to client
-            for client_ID in range(self.gateway_num+1, self.gateway_num+1+self.client_num):
+            for client_ID in range(self.gateway_num + 1, self.gateway_num + 1 + self.client_num):
                 result, mid = self._client.subscribe(
                     self._topic + str(client_ID) + '_' + str(self.client_id), 0)
                 self._unacked_sub.append(mid)
@@ -92,7 +92,7 @@ class MqttCommManager(BaseCommunicationManager):
             # print(result)
 
             # subscribe to gateway
-            for gateway_ID in range(1, self.gateway_num+1):
+            for gateway_ID in range(1, self.gateway_num + 1):
                 result, mid = self._client.subscribe(
                     self._topic + str(gateway_ID) + '_' + str(self.client_id), 0)
                 self._unacked_sub.append(mid)
