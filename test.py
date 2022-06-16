@@ -1,5 +1,5 @@
 
-from fedml_api.data_preprocessing.load_data import load_partition_data_HAR
+from fedml_api.data_preprocessing.load_data import load_partition_data_HPWREN
 
 
 (
@@ -11,7 +11,7 @@ from fedml_api.data_preprocessing.load_data import load_partition_data_HAR
     train_data_local_dict,
     test_data_local_dict,
     output_dim,
-) = load_partition_data_HAR(50,"data/HAR")
+) = load_partition_data_HPWREN(50,"data/HPWREN")
 
 
 

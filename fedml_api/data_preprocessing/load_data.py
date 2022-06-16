@@ -8,6 +8,7 @@ from .cifar10.data_loader import load_cifar10_data, get_dataloader_CIFAR10, get_
 
 from .shakespeare.data_loader import get_shakespeare_dataloader
 from .HAR.data_loader import get_HAR_dataloader
+from .HPWREN.data_loader import get_HPWREN_dataloader
 
 
 def uniform(N, k):
@@ -263,6 +264,31 @@ def load_partition_data_HAR(batch_size,dataset_dir):
         test_loaders,
         output_dim,
     ) = get_HAR_dataloader(batch_size,dataset_dir)
+
+    train_data_local_dict = train_loaders
+    test_data_local_dict = test_loaders
+    class_num = output_dim
+    return train_data_num, test_data_num, train_data_global, test_data_global, \
+           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+
+
+
+
+def load_partition_data_HPWREN(batch_size,dataset_dir):
+
+    logging.info("Loading HPWREN - "+dataset_dir)
+
+    (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        data_local_num_dict,
+        train_loaders,
+        test_loaders,
+        output_dim,
+    ) = get_HPWREN_dataloader(batch_size,dataset_dir)
 
     train_data_local_dict = train_loaders
     test_data_local_dict = test_loaders
