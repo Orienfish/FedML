@@ -76,30 +76,13 @@ class ClientAssociation(object):
         if self.asso_type == 'random':
             conn = []
             for i in range(self.n_clients):
-                #if self.pref is not None:
-                    # Bias random association
-                #    bias_id = self.labels.index(self.pref[i]) / \
-                #              self.label_num * self.n_gateways
-                #    idx = (np.abs(bias_id - all_ids)).argmin()
-                #    gateway_id = all_ids[idx]
-                #elif self.cls_num is not None:
-                    # Noniid random association
-                #    noniid_id = (self.cls_num[i] - self.min_cls_num) / \
-                #                self.unique_cls_num * self.n_gateways
-                #    idx = (np.abs(noniid_id - all_ids)).argmin()
-                #    gateway_id = all_ids[idx]
-                #else:
-                    # Pure random association
                 gateway_id = np.random.choice(all_ids)
 
                 conn.append(np.eye(self.n_gateways)[gateway_id])
 
             conn = np.array(conn, dtype=np.int)
-            print(conn)
 
         elif self.asso_type == 'gurobi':
-            assert grads is not None, "grads should not be none!"
-
             import gurobipy as gp
             from gurobipy import GRB
 
@@ -158,5 +141,6 @@ class ClientAssociation(object):
             f.write('\n')
 
         self.prev_conn = conn  # Update the previous connections
+        print(conn)
 
         return conn
