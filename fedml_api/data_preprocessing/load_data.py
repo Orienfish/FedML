@@ -6,7 +6,9 @@ from .MNIST.data_loader import load_mnist_data, get_dataloader_MNIST, get_datalo
 from .FashionMNIST.data_loader import load_fashionmnist_data, get_dataloader_FashionMNIST, get_dataloader_test_FashionMNIST
 from .cifar10.data_loader import load_cifar10_data, get_dataloader_CIFAR10, get_dataloader_test_CIFAR10
 
-from .shakespeare.data_loader import load_partition_data_shakespeare,get_shakespeare_dataloader
+from .shakespeare.data_loader import get_shakespeare_dataloader
+from .HAR.data_loader import get_HAR_dataloader
+
 
 def uniform(N, k):
     """Uniform distribution of 'N' items into 'k' groups."""
@@ -239,6 +241,29 @@ def load_partition_data_shakespeare(batch_size,dataset_dir):
         output_dim,
     ) = get_shakespeare_dataloader(batch_size,dataset_dir)
         
+    train_data_local_dict = train_loaders
+    test_data_local_dict = test_loaders
+    class_num = output_dim
+    return train_data_num, test_data_num, train_data_global, test_data_global, \
+           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+
+
+def load_partition_data_HAR(batch_size,dataset_dir):
+
+    logging.info("Loading HAR - "+dataset_dir)
+
+    (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        data_local_num_dict,
+        train_loaders,
+        test_loaders,
+        output_dim,
+    ) = get_HAR_dataloader(batch_size,dataset_dir)
+
     train_data_local_dict = train_loaders
     test_data_local_dict = test_loaders
     class_num = output_dim

@@ -1,5 +1,5 @@
-'''
-from fedml_api.data_preprocessing.load_data import load_partition_data_shakespeare
+
+from fedml_api.data_preprocessing.load_data import load_partition_data_HAR
 
 
 (
@@ -11,7 +11,7 @@ from fedml_api.data_preprocessing.load_data import load_partition_data_shakespea
     train_data_local_dict,
     test_data_local_dict,
     output_dim,
-) = load_partition_data_shakespeare(50,"data/shakespeare")
+) = load_partition_data_HAR(50,"data/HAR")
 
 
 
