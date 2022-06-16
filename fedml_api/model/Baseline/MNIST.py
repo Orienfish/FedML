@@ -6,14 +6,12 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 import copy
 
-
-
 class MNIST_Net(nn.Module):
     def __init__(self):
         super(MNIST_Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 20, 5, 1)
         self.conv2 = nn.Conv2d(20, 50, 5, 1)
-        self.fc1 = nn.Linear(50*4*4, 500)
+        self.fc1 = nn.Linear(4 * 4 * 50, 500)
         self.fc2 = nn.Linear(500, 10)
 
     def forward(self, x):

@@ -36,17 +36,15 @@ class MyModelTrainer(ModelTrainer):
 
     # train
     def train(self, train_data, args):
-        if args.dataset == "cifar10" or args.dataset == "mnist" or args.dataset == "fashionmnist":
-            print("Train func: train_cifar10_mnist_fashionmnist")
-            self.train_cifar10_mnist_fashionmnist(train_data, args)
-        elif args.dataset == "shakespeare":
+        if args.dataset == "shakespeare":
             print("Train func: train_shakespeare")
             self.train_shakespeare(train_data, args)
         else:
-            print("Unimplemented")
+            print("Train func: train_cifar10_mnist_fashionmnist")
+            self.train_general(train_data, args)
 
 
-    def train_cifar10_mnist_fashionmnist(self, train_data, args):
+    def train_general(self, train_data, args):
         old_model = copy.deepcopy(self.classifier)
         old_model.to(self.device)
         old_model.eval()
