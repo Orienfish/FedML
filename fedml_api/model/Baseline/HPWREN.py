@@ -29,11 +29,11 @@ class HPWREN_Net(nn.Module):
 
         self.fc = nn.Linear(self.hidden_size, self.output_size)
 
-    def forward(self, x):
-        h_0 = torch.zeros(self.num_layers, x.shape[0], self.hidden_size).to(device)
-        c_0 = torch.zeros(self.num_layers, x.shape[0], self.hidden_size).to(device)
+    def forward(self, x, prev_state):
+        #h_0 = torch.zeros(self.num_layers, x.shape[0], self.hidden_size).to(device)
+        #c_0 = torch.zeros(self.num_layers, x.shape[0], self.hidden_size).to(device)
 
-        out, (h_out, c_out) = self.lstm(x, (h_0, c_0))  # b, t, output_size
+        out, (h_out, c_out) = self.lstm(x, prev_state)  # b, t, output_size
 
         out = self.fc(out)
         out = out[:, -1, :]

@@ -111,9 +111,9 @@ class BaselineCNNAggregator(object):
             else:
                 return 1 / (a * (staleness - b) + 1)
 
-    '''
+
     # for local test only
-    def aggregate(self,client_model_list):
+    def local_test_aggregate(self,client_model_list):
         model_list = []
         
         local_sample_number = self.args.data_size_per_client
@@ -136,7 +136,7 @@ class BaselineCNNAggregator(object):
 
         print("Averaged")
         return averaged_params
-    '''
+
 
 
     def test_on_server_for_all_clients(self, round_idx, batch_selection=None):

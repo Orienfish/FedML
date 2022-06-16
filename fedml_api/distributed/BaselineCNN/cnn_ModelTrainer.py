@@ -78,9 +78,23 @@ class MyModelTrainer(ModelTrainer):
         for epoch in range(args.epochs):
             batch_loss, batch_l2_loss = [], []
             for batch_idx, (x, y) in enumerate(train_data):
-                x, y = x.to(self.device), y.to(self.device).type(torch.long)
+
+                if args.dataset == "har":
+                    x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.long)
+                    y = y - 1 # original label 1-6, suppose to be 1-5
+                    outputs = model(x)
+                elif args.dataset == "hpwren":
+                    x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.long)
+                    hidden_size = 128   # need to match model file
+                    num_layers = 1      # need to match model file
+                    h_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
+                    c_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
+                    outputs = model(x,(h_0,c_0))
+                else:
+                    x, y = x.to(self.device), y.to(self.device).type(torch.long)
+                    outputs = model(x)
+
                 optimizer.zero_grad()
-                outputs = model(x)
                 loss = criterion(outputs, y)
 
                 # Add regularization
@@ -127,9 +141,20 @@ class MyModelTrainer(ModelTrainer):
             if batch_selection is not None and batch_idx not in batch_selection:
                 continue
 
-            x, y = x.to(self.device), y.to(self.device).type(torch.long)
-
-            outputs = model(x)
+            if args.dataset == "har":
+                x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.long)
+                y = y - 1 # original label 1-6, suppose to be 1-5
+                outputs = model(x)
+            elif args.dataset == "hpwren":
+                x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.long)
+                hidden_size = 128   # need to match model file
+                num_layers = 1      # need to match model file
+                h_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
+                c_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
+                outputs = model(x,(h_0,c_0))
+            else:
+                x, y = x.to(self.device), y.to(self.device).type(torch.long)
+                outputs = model(x)
 
             test_loss += criterion(outputs, y).item()
 
