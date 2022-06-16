@@ -153,8 +153,8 @@ class BaselineCNNServerManager(ServerManager):
                              sender_id - self.client_offset)
 
         logging.info("Receive model index = {} "
-                     "Received num = {}".format(sender_id - self.gateway_offset,
-                                                sum(self.flag_gateway_model_uploaded)))
+                     "Received num = {}".format(sender_id - self.client_offset,
+                                                sum(self.flag_client_model_uploaded)))
         logging.info('warmup uploaded: {}'.format(self.flag_client_model_uploaded))
 
     def handle_message_receive_model_from_gateway_sync(self, msg_params):
@@ -181,6 +181,7 @@ class BaselineCNNServerManager(ServerManager):
         num_samples_dict = msg_params.get(MyMessage.MSG_ARG_KEY_NUM_SAMPLES_DICT)
 
         for k in round_delay_dict.keys():
+            logging.info('update client {}: {}, {}'.format(k, loss_dict[k], round_delay_dict))
             self.ca.update_loss_n_delay(loss_dict[k], round_delay_dict[k], int(k))
             self.ca.update_grads(grads_dict[k], num_samples_dict[k], int(k))
 
@@ -296,7 +297,7 @@ class BaselineCNNServerManager(ServerManager):
         local_sample_number = sum([num_samples_dict[k] for k in num_samples_dict.keys()])
 
         for k in round_delay_dict.keys():
-            logging.info('update client {}'.format(k))
+            logging.info('update client {}: {}, {}'.format(k, loss_dict[k], round_delay_dict))
             self.ca.update_loss_n_delay(loss_dict[k], round_delay_dict[k], int(k))
             self.ca.update_grads(grads_dict[k], num_samples_dict[k], int(k))
 

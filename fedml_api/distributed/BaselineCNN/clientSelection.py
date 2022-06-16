@@ -68,7 +68,7 @@ class ClientSelection(object):
 
         # print(client_id, grads[:10])
         # print(self.grads[:, :10])
-        logging.info(self.dissimil_mat)
+        # logging.info(self.dissimil_mat)
 
     def tier_profiling(self):
         # Sort clients by delay, fastest first
