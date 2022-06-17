@@ -74,6 +74,9 @@ class MyModelTrainer(ModelTrainer):
         optimizer = self.optimizer
         criterion = self.criterion
 
+        if args.dataset == "shakespeare":
+            batch_size, state_h, state_c = None, None, None
+
         epoch_loss, epoch_l2_loss = [], []
         for epoch in range(args.epochs):
             batch_loss, batch_l2_loss = [], []
@@ -90,6 +93,18 @@ class MyModelTrainer(ModelTrainer):
                     h_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
                     c_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
                     outputs = model(x,(h_0,c_0))
+                elif args.dataset == "shakespeare":
+                    x, y = x.to(self.device), y.to(self.device).type(torch.long)
+                    if batch_size is None:
+                        batch_size = x.shape[0]
+                        state_h, state_c = model.zero_state(batch_size)
+                        state_h = state_h.to(self.device)
+                        state_c = state_c.to(self.device)
+                    if x.shape[0] < batch_size:  # Less than one batch
+                        break
+                    outputs, (state_h, state_c) = model(x, (state_h, state_c))
+                    state_h = state_h.detach()
+                    state_c = state_c.detach()
                 else:
                     x, y = x.to(self.device), y.to(self.device).type(torch.long)
                     outputs = model(x)
@@ -136,6 +151,9 @@ class MyModelTrainer(ModelTrainer):
         test_loss = 0
         correct = 0
 
+        if args.dataset == "shakespeare":
+            batch_size, state_h, state_c = None, None, None
+
         total = args.batch_size * len(batch_selection)
         for batch_idx, (x, y) in enumerate(test_data):
             if batch_selection is not None and batch_idx not in batch_selection:
@@ -152,6 +170,18 @@ class MyModelTrainer(ModelTrainer):
                 h_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
                 c_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
                 outputs = model(x,(h_0,c_0))
+            elif args.dataset == "shakespeare":
+                x, y = x.to(self.device), y.to(self.device).type(torch.long)
+                if batch_size is None:
+                    batch_size = x.shape[0]
+                    state_h, state_c = model.zero_state(batch_size)
+                    state_h = state_h.to(self.device)
+                    state_c = state_c.to(self.device)
+                if x.shape[0] < batch_size:  # Less than one batch
+                    break
+                outputs, (state_h, state_c) = model(x, (state_h, state_c))
+                state_h = state_h.detach()
+                state_c = state_c.detach()
             else:
                 x, y = x.to(self.device), y.to(self.device).type(torch.long)
                 outputs = model(x)
