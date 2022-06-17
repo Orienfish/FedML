@@ -84,7 +84,7 @@ class MyModelTrainer(ModelTrainer):
                     y = y - 1 # original label 1-6, suppose to be 1-5
                     outputs = model(x)
                 elif args.dataset == "hpwren":
-                    x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.long)
+                    x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.float)
                     hidden_size = 128   # need to match model file
                     num_layers = 1      # need to match model file
                     h_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
@@ -146,7 +146,7 @@ class MyModelTrainer(ModelTrainer):
                 y = y - 1 # original label 1-6, suppose to be 1-5
                 outputs = model(x)
             elif args.dataset == "hpwren":
-                x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.long)
+                x, y = x.to(self.device).type(torch.float), y.to(self.device).type(torch.float)
                 hidden_size = 128   # need to match model file
                 num_layers = 1      # need to match model file
                 h_0 = torch.zeros(num_layers, x.shape[0], hidden_size).to(self.device)
@@ -156,12 +156,13 @@ class MyModelTrainer(ModelTrainer):
                 x, y = x.to(self.device), y.to(self.device).type(torch.long)
                 outputs = model(x)
 
-            test_loss += criterion(outputs, y).item()
 
-            _, y_hat = outputs.max(1)
-
-
-            correct += y_hat.eq(y).sum().item()
+            if args.dataset == "hpwren":
+                test_loss += y.size(0) * criterion(outputs, y).item()
+            else:
+                test_loss += criterion(outputs, y).item()
+                _, y_hat = outputs.max(1)
+                correct += y_hat.eq(y).sum().item()
 
         test_loss /= len(batch_selection)
         acc = correct / total
