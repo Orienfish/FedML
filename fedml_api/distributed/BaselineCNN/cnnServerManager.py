@@ -29,7 +29,7 @@ def terminate():
         # print('hello')
         if not running:
             try:
-                for line in os.popen('ps aux | grep app_CNN.py | grep -v grep'):
+                for line in os.popen('ps aux | grep app_CNN_server.py | grep -v grep'):
                     fields = line.split()
                     pid = fields[1]
                     print('extracted pid: ', pid)
@@ -193,7 +193,7 @@ class BaselineCNNServerManager(ServerManager):
         self.aggregator.add_local_trained_result(sender_id - self.gateway_offset,
                                                  cnn_params, local_sample_number)
 
-        if sum(self.flag_gateway_model_uploaded) >= self.gateway_num:
+        if self.warmup_done and sum(self.flag_gateway_model_uploaded) >= self.gateway_num:
             # Sync aggregation
             global_model_params = self.aggregator.aggregate(self.flag_gateway_model_uploaded)
 
@@ -341,10 +341,8 @@ class BaselineCNNServerManager(ServerManager):
                 running = False
             else:
                 # gateway trigger
-                for gateway_id in range(self.gateway_offset,
-                                        self.gateway_offset + self.gateway_num):
-                    self.send_message_sync_model_to_gateway(gateway_id,
-                                                            self.round_idx)
+                self.send_message_sync_model_to_gateway(sender_id,
+                                                        self.round_idx)
 
     def handle_init_register_from_client(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -390,10 +388,11 @@ class BaselineCNNServerManager(ServerManager):
 
         round_delay_dict, loss_dict, grads_dict, num_samples_dict = {}, {}, {}, {}
         for idx in conn_ids:
-            round_delay_dict[idx] = self.ca.est_delay[idx]
-            loss_dict[idx] = self.ca.losses[idx]
-            grads_dict[idx] = list(self.ca.grads[idx])
-            num_samples_dict[idx] = int(self.ca.num_samples[idx])
+            if self.ca.est_delay[idx] > 0:  # Check for validity
+                round_delay_dict[idx] = self.ca.est_delay[idx]
+                loss_dict[idx] = self.ca.losses[idx]
+                grads_dict[idx] = list(self.ca.grads[idx])
+                num_samples_dict[idx] = int(self.ca.num_samples[idx])
 
         logging.info('conn ids: {}'.format(conn_ids))
         logging.info('loss dict: {}'.format(loss_dict))

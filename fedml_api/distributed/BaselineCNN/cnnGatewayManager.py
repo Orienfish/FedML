@@ -328,10 +328,11 @@ class BaselineCNNGatewayManager(GatewayManager):
         logging.info('conn ids: {}'.format(conn_ids))
 
         for idx in conn_ids:
-            round_delay_dict[idx] = self.cs.est_delay[idx]
-            loss_dict[idx] = self.cs.losses[idx]
-            grads_dict[idx] = list(self.cs.grads[idx])
-            num_samples_dict[idx] = int(self.cs.num_samples[idx])
+            if self.cs.est_delay[idx] > 0:  # Check for validity
+                round_delay_dict[idx] = self.cs.est_delay[idx]
+                loss_dict[idx] = self.cs.losses[idx]
+                grads_dict[idx] = list(self.cs.grads[idx])
+                num_samples_dict[idx] = int(self.cs.num_samples[idx])
 
         logging.info('loss dict: {}'.format(loss_dict))
         logging.info('grads dict {}'.format([grad[:2] for grad in grads_dict.values()]))

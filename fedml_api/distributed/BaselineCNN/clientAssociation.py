@@ -57,7 +57,7 @@ class ClientAssociation(object):
 
         # print(client_id, grads[:10])
         # print(self.grads[:, :10])
-        logging.info(self.dissimil_mat)
+        # logging.info(self.dissimil_mat)
 
         self.eta = (self.avg_grad @ self.grads.T).reshape((-1))  # (N, )
         self.v = - np.sum(self.dissimil_mat, axis=1) / (self.n_clients - 1)  # (N,)
