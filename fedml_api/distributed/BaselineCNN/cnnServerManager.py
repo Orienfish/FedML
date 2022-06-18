@@ -39,7 +39,7 @@ def terminate():
 
 
 class BaselineCNNServerManager(ServerManager):
-    def __init__(self, args, aggregator, logger, comm=None, rank=0, size=0,
+    def __init__(self, args, aggregator, logger, cls_num, comm=None, rank=0, size=0,
                  backend="MQTT", mqtt_host="127.0.0.1", mqtt_port=1883,
                  is_preprocessed=False, batch_selection=None):
         super().__init__(args, comm, rank, size, backend, mqtt_host, mqtt_port)
@@ -59,7 +59,7 @@ class BaselineCNNServerManager(ServerManager):
 
         # For client selection
         self.ca = ClientAssociation(self.worker_num, self.gateway_num, args.association,
-                                    args.ca_phi, args.trial_name)
+                                    args.ca_phi, args.trial_name, cls_num)
 
         # For results records
         self.start_time = time.time()

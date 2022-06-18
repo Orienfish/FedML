@@ -4,7 +4,7 @@ import logging
 class ClientAssociation(object):
     """Client association decision making."""
     def __init__(self, n_clients, n_gateways, asso_type, phi, model_name,
-                 pref=None, cls_num=None, labels=None):
+                 cls_num=None):
         # pref: [N, ], the preferred label of clients
         # cls_num: [N, ], the number of classes on clients
         self.n_clients = n_clients
@@ -12,13 +12,7 @@ class ClientAssociation(object):
         self.asso_type = asso_type
         self.log_file = 'logca_{}'.format(model_name)
         self.phi = phi
-
-        #self.pref = pref
-        #self.labels = labels
-        #self.label_num = len(labels)
-        #self.cls_num = cls_num
-        #self.unique_cls_num = len(set(cls_num))
-        #self.min_cls_num = min(cls_num)
+        self.cls_num = cls_num
 
         self.est_delay = np.array([0.0 for _ in range(self.n_clients)])
         self.losses = np.array([0.0 for _ in range(self.n_clients)])
@@ -76,7 +70,18 @@ class ClientAssociation(object):
         if self.asso_type == 'random':
             conn = []
             for i in range(self.n_clients):
-                gateway_id = np.random.choice(all_ids)
+                if self.cls_num is not None:
+                    # Biased device-gateway matching depending on class num
+                    match_book = {
+                        1: 0,
+                        2: 1,
+                        3: 1,
+                        4: 1,
+                        5: 2
+                    }
+                    gateway_id = match_book[self.cls_num[i]]
+                else:
+                    gateway_id = np.random.choice(all_ids)
 
                 conn.append(np.eye(self.n_gateways)[gateway_id])
 
