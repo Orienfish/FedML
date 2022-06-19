@@ -6,6 +6,11 @@ from .MNIST.data_loader import load_mnist_data, get_dataloader_MNIST, get_datalo
 from .FashionMNIST.data_loader import load_fashionmnist_data, get_dataloader_FashionMNIST, get_dataloader_test_FashionMNIST
 from .cifar10.data_loader import load_cifar10_data, get_dataloader_CIFAR10, get_dataloader_test_CIFAR10
 
+from .shakespeare.data_loader import get_shakespeare_dataloader
+from .HAR.data_loader import get_HAR_dataloader
+from .HPWREN.data_loader import get_HPWREN_dataloader
+
+
 def uniform(N, k):
     """Uniform distribution of 'N' items into 'k' groups."""
     dist = []
@@ -264,6 +269,81 @@ def get_dataloader_test(dataset, datadir, train_bs, test_bs, dataidxs_train, dat
     return testloader
 
 
+def load_partition_data_shakespeare(batch_size,dataset_dir):
+
+    logging.info("Loading shakespeare - "+dataset_dir)
+    
+    (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        data_local_num_dict,
+        train_loaders,
+        test_loaders,
+        output_dim,
+    ) = get_shakespeare_dataloader(batch_size,dataset_dir)
+        
+    train_data_local_dict = train_loaders
+    test_data_local_dict = test_loaders
+    class_num = output_dim
+    return train_data_num, test_data_num, train_data_global, test_data_global, \
+           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+
+
+def load_partition_data_HAR(batch_size,dataset_dir):
+
+    logging.info("Loading HAR - "+dataset_dir)
+
+    (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        data_local_num_dict,
+        train_loaders,
+        test_loaders,
+        output_dim,
+    ) = get_HAR_dataloader(batch_size,dataset_dir)
+
+    train_data_local_dict = train_loaders
+    test_data_local_dict = test_loaders
+    class_num = output_dim
+    return train_data_num, test_data_num, train_data_global, test_data_global, \
+           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+
+
+
+
+def load_partition_data_HPWREN(batch_size,dataset_dir):
+
+    logging.info("Loading HPWREN - "+dataset_dir)
+
+    (
+        client_num,
+        train_data_num,
+        test_data_num,
+        train_data_global,
+        test_data_global,
+        data_local_num_dict,
+        train_loaders,
+        test_loaders,
+        output_dim,
+    ) = get_HPWREN_dataloader(batch_size,dataset_dir)
+
+    train_data_local_dict = train_loaders
+    test_data_local_dict = test_loaders
+    class_num = output_dim
+    return train_data_num, test_data_num, train_data_global, test_data_global, \
+           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+        
+    
+    
+
+
+
 def load_partition_data(dataset, data_dir, partition_method, partition_label,
                         partition_alpha, partition_secondary,
                         partition_min_cls, partition_max_cls,
@@ -307,3 +387,9 @@ def load_partition_data(dataset, data_dir, partition_method, partition_label,
         test_data_local_dict[client_idx] = test_data_local
     return train_data_num, test_data_num, train_data_global, test_data_global, \
            data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+           
+           
+           
+           
+           
+           
