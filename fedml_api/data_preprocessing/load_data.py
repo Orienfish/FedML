@@ -386,5 +386,4 @@ def load_partition_data(dataset, data_dir, partition_method, partition_label,
         train_data_local_dict[client_idx] = train_data_local
         test_data_local_dict[client_idx] = test_data_local
     return train_data_num, test_data_num, train_data_global, test_data_global, \
-           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num, \
-           traindata_cls_counts
+           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
