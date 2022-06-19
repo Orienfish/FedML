@@ -5,11 +5,12 @@ class MyMessage(object):
     # server to client
     MSG_TYPE_S2C_INIT_CONFIG = 1
     MSG_TYPE_S2C_SYNC_MODEL_TO_CLIENT = 2
+    MSG_TYPE_S2C_FINISH = 3
 
     # client to server
-    MSG_TYPE_C2S_SEND_MODEL_TO_SERVER = 3
-    MSG_TYPE_C2S_SEND_STATS_TO_SERVER = 4
-    MSG_TYPE_C2S_INIT_REGISTER = 5
+    MSG_TYPE_C2S_SEND_MODEL_TO_SERVER = 5
+    MSG_TYPE_C2S_SEND_STATS_TO_SERVER = 6
+    MSG_TYPE_C2S_INIT_REGISTER = 7
 
     MSG_ARG_KEY_TYPE = "msg_type"
     MSG_ARG_KEY_SENDER = "sender"
@@ -19,7 +20,10 @@ class MyMessage(object):
         message payload keywords definition
     """
     MSG_ARG_KEY_NUM_SAMPLES = "num_samples"
+    MSG_ARG_KEY_LOSS = "loss"
+    MSG_ARG_KEY_COMP_DELAY = "comp_delay"
     MSG_ARG_KEY_MODEL_PARAMS = "model_params"
+    MSG_ARG_KEY_MODEL_GRADS = "model_grads"
     MSG_ARG_KEY_CLIENT_INDEX = "client_idx"
     MSG_ARG_KEY_DOWNLOAD_EPOCH = "download_epoch"
 

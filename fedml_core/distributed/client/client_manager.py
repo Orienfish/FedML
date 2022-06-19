@@ -1,5 +1,7 @@
 import logging
 from abc import abstractmethod
+import os
+import signal
 
 # from mpi4py import MPI
 
@@ -41,12 +43,12 @@ class ClientManager(Observer):
         return self.rank
 
     def receive_message(self, msg_type, msg_params) -> None:
-        # logging.info("receive_message. rank_id = %d, msg_type = %s. msg_params = %s" % (
-        #     self.rank, str(msg_type), str(msg_params.get_content())))
+        logging.info("receive_message. rank_id = %d, msg_type = %s" % (
+             self.rank, str(msg_type)))
         handler_callback_func = self.message_handler_dict[msg_type]
         handler_callback_func(msg_params)
 
-    def send_message(self, message):
+    def send_message(self, message, qos=0):
         msg = Message()
         msg.add(Message.MSG_ARG_KEY_TYPE, message.get_type())
         msg.add(Message.MSG_ARG_KEY_SENDER, message.get_sender_id())
@@ -54,7 +56,7 @@ class ClientManager(Observer):
         for key, value in message.get_params().items():
             # logging.info("%s == %s" % (key, value))
             msg.add(key, value)
-        self.com_manager.send_message(msg)
+        self.com_manager.send_message(msg, qos=qos)
 
     @abstractmethod
     def register_message_receive_handlers(self) -> None:
@@ -64,6 +66,15 @@ class ClientManager(Observer):
         self.message_handler_dict[msg_type] = handler_callback_func
 
     def finish(self):
-        logging.info("__finish server")
+        logging.info("__finish client")
         #if self.backend == "MPI":
         #    MPI.COMM_WORLD.Abort()
+
+        try:
+            for line in os.popen('ps aux | grep fedcnn_rpi_client.py | grep -v grep'):
+                fields = line.split()
+                pid = fields[1]
+                print('extracted pid: ', pid)
+                os.kill(int(pid), signal.SIGKILL)
+        except:
+            print('Error encountered while running killing script')

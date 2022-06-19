@@ -14,7 +14,7 @@ class BaselineCNNAggregator(object):
 
     def __init__(self, args, train_global, test_global, all_train_data_num,
                  train_data_local_dict, test_data_local_dict, train_data_local_num_dict,
-                 worker_num, device, model_trainer):
+                 total_num, device, model_trainer):
 
         self.train_global = train_global
         self.test_global = test_global
@@ -25,16 +25,12 @@ class BaselineCNNAggregator(object):
         self.train_data_local_num_dict = train_data_local_num_dict
 
         self.classifier = model_trainer
-        self.worker_num = worker_num
+        self.worker_num = total_num
         self.device = device
         self.args = args
 
         self.model_dict = dict()
         self.sample_num_dict = dict()
-        self.flag_client_model_uploaded_dict = dict()
-        
-        for idx in range(self.worker_num):
-            self.flag_client_model_uploaded_dict[idx] = False
 
     def get_global_model_params(self):
         return self.classifier.get_model_params()
@@ -43,28 +39,21 @@ class BaselineCNNAggregator(object):
         self.classifier.set_model_params(model_parameters)
 
     def add_local_trained_result(self, index, model_params, sample_num):
-        logging.info("Receive model index = %d" % index)
         self.model_dict[index] = model_params
         self.sample_num_dict[index] = sample_num
-        self.flag_client_model_uploaded_dict[index] = True
 
 
-    def check_whether_all_receive(self):
-        for idx in range(self.worker_num):
-            if not self.flag_client_model_uploaded_dict[idx]:
-                return False
-        for idx in range(self.worker_num):
-            self.flag_client_model_uploaded_dict[idx] = False
-        return True
-
-
-    def aggregate(self):
+    def aggregate(self, flag_client_model_uploaded):
         model_list = []
+
+        # Partly received
         local_sample_number = self.args.data_size_per_client
-        training_num = self.args.client_num_per_round * self.args.data_size_per_client
-        w = local_sample_number / training_num
+        training_num = 0
         for idx in range(self.worker_num):
-            model_list.append(self.model_dict[idx])
+            if flag_client_model_uploaded[idx]:
+                model_list.append(self.model_dict[idx])
+                training_num += local_sample_number
+        w = local_sample_number / training_num
         
         averaged_params = model_list[0]
         for k in averaged_params.keys():

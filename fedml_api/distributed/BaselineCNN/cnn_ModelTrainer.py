@@ -4,6 +4,7 @@ import torch
 from torch import nn
 import torch.optim as optim
 import copy
+import numpy as np
 
 try:
     from fedml_core.trainer.model_trainer import ModelTrainer
@@ -54,13 +55,48 @@ class MyModelTrainer(ModelTrainer):
 
     # get cnn parameters
     def get_model_params(self):
-        return self.classifier.cpu().state_dict()
+        return copy.deepcopy(self.classifier.cpu().state_dict())
 
-    # set snn parameter
+    # set cnn parameters
     def set_model_params(self, model_parameters):
         self.classifier.load_state_dict(model_parameters)
 
+    # get delta cnn parameters
+    def get_delta_params(self, old_model_params):
+        new_model_params = self.get_model_params()
 
+        delta_params = copy.deepcopy(new_model_params)
+        for k in delta_params.keys():
+            delta_params[k] = new_model_params[k] - old_model_params[k]
+
+        print(self.flatten_weights((delta_params))[:10])
+        return self.flatten_weights(delta_params)
+
+    def flatten_weights(self, weights):
+        # Flatten weights of dictionary into vectors
+        weight_vecs = []
+        for k in weights.keys():
+            weight_vecs.extend(weights[k].flatten().tolist())
+
+        return weight_vecs  # a list
+
+    # get cnn gradients
+    def get_model_grads(self):
+        grads = []
+        for name, weight in self.classifier.cpu().named_parameters():  # pylint: disable=no-member
+            if weight.requires_grad:
+                grads.append((name, weight.grad))
+
+        return self.flatten_grads(grads)
+
+    # flatten gradients
+    def flatten_grads(self, grads):
+        # Flatten grads of (name, grad) tuples into vectors
+        grad_vecs = []
+        for _, grad in grads:
+            grad_vecs.extend(grad.flatten().tolist())
+
+        return grad_vecs  # a list
 
     # train
     def train(self, train_data, args):
@@ -131,13 +167,13 @@ class MyModelTrainer(ModelTrainer):
 
             if len(batch_l2_loss) > 0:
                 epoch_l2_loss.append(sum(batch_l2_loss) / len(batch_l2_loss))
-                print('Epoch: [{}/{}]\tLoss: {:.6f}\t'
+                logging.info('Epoch: [{}/{}]\tLoss: {:.6f}\t'
                       'L2 Loss: {:.6f}'.format(epoch, args.epochs,
                                                sum(epoch_loss) / len(epoch_loss),
                                                sum(epoch_l2_loss) / len(epoch_l2_loss)))
             else:
-                print('Epoch: [{}/{}]\tLoss: {:.6f}'.format(epoch, args.epochs,
-                                                                sum(epoch_loss) / len(epoch_loss)))
+                logging.info('Epoch: [{}/{}]\tLoss: {:.6f}'.format(epoch, args.epochs,
+                                                            sum(epoch_loss) / len(epoch_loss)))
             self.loss = sum(epoch_loss) / len(epoch_loss)
 
 
@@ -186,7 +222,6 @@ class MyModelTrainer(ModelTrainer):
                 x, y = x.to(self.device), y.to(self.device).type(torch.long)
                 outputs = model(x)
 
-
             if args.dataset == "hpwren":
                 test_loss += y.size(0) * criterion(outputs, y).item()
             else:
@@ -198,8 +233,6 @@ class MyModelTrainer(ModelTrainer):
         acc = correct / total
 
         return test_loss, acc
-
-
 
 
     # not used
