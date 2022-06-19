@@ -12,9 +12,9 @@ class BaseCNN_Trainer(object):
         self.train_data_local_num_dict = train_data_local_num_dict
         self.test_data_local_dict = test_data_local_dict
         self.all_train_data_num = train_data_num
-        self.train_local = list(self.train_data_local_dict.keys())[client_index]
+        self.train_local = self.train_data_local_dict[client_index]
         self.local_sample_number = list(self.train_data_local_num_dict.keys())[client_index]
-        self.test_local = list(self.test_data_local_dict.keys())[client_index]
+        self.test_local = self.test_data_local_dict[client_index]
 
         self.device = device
         self.args = args
