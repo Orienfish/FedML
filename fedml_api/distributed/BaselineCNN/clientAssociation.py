@@ -76,7 +76,7 @@ class ClientAssociation(object):
                         1: 0,
                         2: 1,
                         3: 1,
-                        4: 1,
+                        4: 2,
                         5: 2
                     }
                     gateway_id = match_book[self.cls_num[i]]

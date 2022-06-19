@@ -20,7 +20,7 @@ class ClientSelection(object):
         self.gamma = gamma
 
         # Create loss and delay records
-        self.est_delay = np.array([0.0 for _ in range(self.n_clients)])
+        self.est_delay = np.array([1e5 for _ in range(self.n_clients)])
         self.est_delay_sample_num = np.array([0 for _ in range(self.n_clients)])
         self.losses = np.array([0.0 for _ in range(self.n_clients)])
         self.grads = None

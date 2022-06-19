@@ -58,8 +58,12 @@ class BaselineCNNServerManager(ServerManager):
         self.batch_selection = batch_selection
 
         # For client selection
-        self.ca = ClientAssociation(self.worker_num, self.gateway_num, args.association,
-                                    args.ca_phi, args.trial_name, cls_num)
+        if self.args.method == 'fedasync' and self.args.selection == 'high_loss_first':
+            self.ca = ClientAssociation(self.worker_num, self.gateway_num, args.association,
+                                        args.ca_phi, args.trial_name, cls_num)
+        else:
+            self.ca = ClientAssociation(self.worker_num, self.gateway_num, args.association,
+                                        args.ca_phi, args.trial_name)
 
         # For results records
         self.start_time = time.time()
@@ -114,6 +118,7 @@ class BaselineCNNServerManager(ServerManager):
                                               self.handle_init_register_from_client)
         self.register_message_receive_handler(MyMessage.MSG_TYPE_C2S_SEND_MODEL_TO_SERVER,
                                               self.handle_message_receive_model_from_client_warmup)
+        self.warmup_start_time = time.time()
         self.warmup_thread = threading.Thread(target=self.warmup_checker)
         self.warmup_thread.start()
 
@@ -241,18 +246,11 @@ class BaselineCNNServerManager(ServerManager):
         while True:
             time.sleep(20)
             uploaded_num = sum(self.flag_client_model_uploaded)
-            not_returned = np.array(self.flag_client_registered) & \
-                           ~np.array(self.flag_client_model_uploaded)
-            waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
-            if np.sum(not_returned) > 0:
-                logging.info('not returned: {}'.format(not_returned))
-                logging.info('warmup waiting time: {}'.format(waiting_time_since_start))
-                min_waiting_time = np.min(waiting_time_since_start)
-            else:
-                min_waiting_time = 0.0
+            waiting_time_since_start = time.time() - self.warmup_start_time
+            logging.info('Warmup waiting time since start: {}'.format(waiting_time_since_start))
 
             if uploaded_num >= self.worker_num or \
-                    (uploaded_num > 0 and min_waiting_time >= self.round_delay_limit):
+                    (uploaded_num > 0 and waiting_time_since_start > self.round_delay_limit):
                 # All received or exceed time limit
                 # Start the first round from client association
                 self.conn_clients = self.ca.solve()
@@ -269,7 +267,7 @@ class BaselineCNNServerManager(ServerManager):
         self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
 
         self.warmup_done = True
-        logging.info('All received. Warmup done.')
+        logging.info('Warmup done.')
         logging.info('Start the experiment!')
 
     def handle_message_receive_model_from_gateway_async(self, msg_params):

@@ -71,10 +71,12 @@ class BaselineCNNGatewayManager(GatewayManager):
         # Indicator of which client has uploaded in sync aggregation
         # This is related but different from the availability of the clients
         # If True, client has uploaded the model and finished last round, thus available
-        # If False, the local round has not returned, thus unavailable
+        # If False, the local round has not returned, thus unavailables
         # Formally, flag_available >= flag_client_model_uploaded
         self.flag_client_model_uploaded = np.array([False for _ in range(self.worker_num)],
                                                    dtype=np.bool)
+
+        self.sync_start_time = None
 
     def run(self):
         super().run()
@@ -137,29 +139,23 @@ class BaselineCNNGatewayManager(GatewayManager):
         # A threaded process that periodically checks whether the sync aggregation
         # can be triggered
         while True:
-            time.sleep(10)
-            uploaded_num = sum(self.flag_client_model_uploaded)
-            not_returned = ~np.array(self.flag_available)
-            waiting_time_since_start = (time.time() - np.array(self.round_start_time))[not_returned]
-            if np.sum(not_returned) > 0:
-                logging.info('not returned: {}'.format(not_returned))
-                logging.info('sync waiting time: {}'.format(waiting_time_since_start))
-                min_waiting_time = np.min(waiting_time_since_start)
-            else:
-                min_waiting_time = 0.0
+            time.sleep(20)
+            if self.sync_start_time is not None:
+                uploaded_num = sum(self.flag_client_model_uploaded)
+                waiting_time_since_start = time.time() - self.sync_start_time
+                logging.info('Sync waiting time since start: {}'.format(waiting_time_since_start))
+                logging.info('uploaded_num: {}'.format(uploaded_num))
+                if uploaded_num >= self.select_num or waiting_time_since_start > self.round_delay_limit:
+                    # All received or exceed time limit
+                    logging.info('Sync Aggregation!')
+                    self.sync_aggregate()
 
-            if uploaded_num >= self.select_num or \
-                    (uploaded_num > 0 and min_waiting_time >= self.round_delay_limit):
-                # All received or exceed time limit
-                logging.info('Sync Aggregation!')
-                self.sync_aggregate()
-
-                # Reset uploaded flag
-                self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
+                    # Reset uploaded flag
+                    self.flag_client_model_uploaded = [False for _ in range(self.worker_num)]
 
     def sync_aggregate(self):
         # Sync aggregation
-        global_model_params = self.aggregator.aggregate(self.flag_client_model_uploaded)
+        self.aggregator.aggregate(self.flag_client_model_uploaded)
 
         # Test
         test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
@@ -189,6 +185,7 @@ class BaselineCNNGatewayManager(GatewayManager):
             for idx in select_ids:
                 self.send_message_sync_model_to_client(idx + self.client_offset,
                                                        self.round_idx)
+            self.sync_start_time = time.time()
 
     def handle_message_receive_model_from_client_async(self, msg_params):
         sender_id = msg_params.get(MyMessage.MSG_ARG_KEY_SENDER)
@@ -311,6 +308,7 @@ class BaselineCNNGatewayManager(GatewayManager):
             for idx in select_ids:
                 self.send_message_sync_model_to_client(idx + self.client_offset,
                                                        self.round_idx)
+            self.sync_start_time = time.time()
 
     def send_model_to_server(self, receive_id):
         logging.info('*****************************************')

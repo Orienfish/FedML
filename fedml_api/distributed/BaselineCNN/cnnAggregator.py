@@ -53,7 +53,10 @@ class BaselineCNNAggregator(object):
                 model_list.append(self.model_dict[idx])
                 training_num += local_sample_number
         w = local_sample_number / training_num
-        
+
+        if len(model_list) == 0:
+            return
+
         averaged_params = model_list[0]
         for k in averaged_params.keys():
             for i in range(0, len(model_list)):
@@ -65,7 +68,7 @@ class BaselineCNNAggregator(object):
                     
         self.set_global_model_params(averaged_params)
 
-        return averaged_params
+        return
 
     def aggregate_async(self, model_params, sample_num, staleness):
         alpha_t = self.args.alpha * self.staleness(staleness)
@@ -83,7 +86,7 @@ class BaselineCNNAggregator(object):
 
         # print("Averaged")
         # print(type(averaged_params))
-        return averaged_params
+        return
 
     def staleness(self, staleness):
         if self.args.staleness_func == "constant":
