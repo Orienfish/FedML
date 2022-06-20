@@ -50,6 +50,9 @@ class ClientSelection(object):
             grads_len = len(grads)
             self.grads = np.zeros((self.n_clients, grads_len))
 
+        if num_samples <= 0:
+            return
+
         self.grads[client_id, :] = np.array(grads)
         self.num_samples[client_id] = num_samples
         self.avg_grad = np.sum(

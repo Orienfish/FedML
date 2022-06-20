@@ -192,7 +192,8 @@ class MyModelTrainer(ModelTrainer):
 
         total = args.batch_size * len(batch_selection)
         for batch_idx, (x, y) in enumerate(test_data):
-            if batch_selection is not None and batch_idx not in batch_selection:
+
+            if batch_idx not in batch_selection:
                 continue
 
             if args.dataset == "har":
@@ -209,12 +210,17 @@ class MyModelTrainer(ModelTrainer):
             elif args.dataset == "shakespeare":
                 x, y = x.to(self.device), y.to(self.device).type(torch.long)
                 if batch_size is None:
-                    batch_size = x.shape[0]
+                    batch_size = args.batch_size
                     state_h, state_c = model.zero_state(batch_size)
                     state_h = state_h.to(self.device)
                     state_c = state_c.to(self.device)
-                if x.shape[0] < batch_size:  # Less than one batch
+
+                #logging.info('{},{}'.format(x.shape[0], batch_size))
+
+                if x.shape[0] < args.batch_size:  # Less than one batch
+                    logging.info('break!!')
                     break
+
                 outputs, (state_h, state_c) = model(x, (state_h, state_c))
                 state_h = state_h.detach()
                 state_c = state_c.detach()
@@ -229,7 +235,7 @@ class MyModelTrainer(ModelTrainer):
                 _, y_hat = outputs.max(1)
                 correct += y_hat.eq(y).sum().item()
 
-        test_loss /= len(batch_selection)
+        test_loss /= len(test_data) # this info is only valid for HPWREN
         acc = correct / total
 
         return test_loss, acc

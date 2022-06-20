@@ -68,7 +68,7 @@ class BaselineCNNAggregator(object):
                     averaged_params[k] += local_model_params[k] * w
                     
         self.set_global_model_params(averaged_params)
-
+        logging.info("Averaged")
         return
 
     def aggregate_async(self, model_params, sample_num, staleness):
@@ -85,7 +85,7 @@ class BaselineCNNAggregator(object):
 
         self.set_global_model_params(averaged_params)
 
-        # print("Averaged")
+        logging.info("Averaged")
         # print(type(averaged_params))
         return
 
@@ -132,6 +132,7 @@ class BaselineCNNAggregator(object):
 
     def test_on_server_for_all_clients(self, round_idx, batch_selection=None):
         test_loss,accuracy = self.classifier.test(self.test_global, self.args, batch_selection)
+
         return test_loss,accuracy
 
 

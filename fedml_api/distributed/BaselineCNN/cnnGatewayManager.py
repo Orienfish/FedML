@@ -161,8 +161,9 @@ class BaselineCNNGatewayManager(GatewayManager):
         test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
                                                                              self.batch_selection)
         cur_time = time.time() - self.start_time
-        logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
+        logging.info('Round {} cur time: {} testloss: {} acc: {}'.format(self.round_idx,
                                                             cur_time,
+                                                            test_loss,
                                                             accuracy))
         logging.info('#########################################\n')
 
@@ -229,8 +230,9 @@ class BaselineCNNGatewayManager(GatewayManager):
         test_loss, accuracy = self.aggregator.test_on_server_for_all_clients(self.round_idx,
                                                                              self.batch_selection)
         cur_time = time.time() - self.start_time
-        logging.info('Round {} cur time: {} acc: {}'.format(self.round_idx,
+        logging.info('Round {} cur time: {} testloss: {} acc: {}'.format(self.round_idx,
                                                             cur_time,
+                                                            test_loss,
                                                             accuracy))
         logging.info('#########################################\n')
 
